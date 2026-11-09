@@ -1,12 +1,3 @@
-<!doctype html>
-<html lang="bg">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#F2B11F">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <title>KRAFTCUT</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -250,7 +241,7 @@ body { padding-top: 0; padding-inline: 0; }
 body { padding-bottom: 46px; }
 @media print { .sheettabs { display: none !important; } body { padding-bottom: 0; } }
 /* На широк екран табовете са отстрани (лява лента), на тесен - долу. */
-@media (min-width: 761px) {
+@media (min-width: 1000px) {
   body { padding-bottom: 0; }
   .sheettabs { top: var(--tbh, 62px); right: auto; bottom: 0; width: 116px; height: auto; flex-direction: column; align-items: stretch; gap: 4px; padding: 14px 0 0; border-top: 0; border-right: 1px solid var(--line); }
   .stab { height: 46px; text-align: left; padding: 0 12px 0 16px; border: 0; border-radius: 8px 0 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-left: 8px; }
@@ -276,7 +267,8 @@ body { padding-bottom: 46px; }
 .tb-file { font-size: 12.5px; font-weight: 600; color: var(--accent-text); flex: none; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-file:empty { display: none; }
 .tb-dirty { font-size: 12.5px; font-weight: 600; color: var(--warn); white-space: nowrap; flex: none; }
-@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .tb-in { gap: 8px; } .mbtn { padding: 0 8px; } .stab { flex: 1; padding: 0 6px; } .stab-info { display: none; } }
+@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .tb-in { gap: 8px; } .mbtn { padding: 0 8px; } }
+@media (max-width: 999px) { .stab { flex: 1; padding: 0 6px; } .stab-info { display: none; } }
 .panel { scroll-margin-top: 72px; }
 .tb-in { position: relative; }
 .menu.static { position: static; }
@@ -303,6 +295,60 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 .ed-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 8px; font-size: 13px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ed-chip:hover { border-color: var(--accent); }
 .ed-chip small { display: block; color: var(--muted); font-size: 12px; }
+/* ---------- Таблет и телефон: по-големи елементи и карти вместо тясна таблица ---------- */
+html { touch-action: manipulation; }
+@media (pointer: coarse) {
+  input[type="text"], input[type="number"], select, textarea { min-height: 46px; font-size: 16px; }
+  button { min-height: 44px; }
+  input[type="checkbox"] { width: 28px; height: 28px; }
+  .mbtn { height: 46px; padding: 0 14px; }
+  .mpop button { height: 46px; }
+  .stab { height: 44px; }
+  .sheettabs { height: 52px; }
+  body { padding-bottom: 62px; }
+  .fsbtn { min-height: 44px; padding: 0 14px; }
+  .zoombtns button { min-width: 48px; }
+  .ed-chip { padding: 10px 12px; }
+}
+@media (pointer: coarse) and (min-width: 1000px) { .sheettabs { height: auto; } body { padding-bottom: 0; } .stab { height: 52px; } }
+@media (max-width: 999px) {
+  #partsTable, #partsTable tbody, #partsTable tr, #partsTable td,
+  #matTable, #matTable tbody, #matTable tr, #matTable td { display: block; }
+  #partsTable thead, #matTable thead { display: none; }
+  #partsTable, #matTable { min-width: 0; }
+  #partsTable tr, #matTable tr { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px 10px; padding: 14px 0; align-items: end; }
+  #partsTable td, #matTable td { padding: 0; min-width: 0; }
+  #partsTable td::before, #matTable td::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
+  #partsTable td:last-child::before, #matTable td:last-child::before { display: none; }
+  #partsTable td input[type="text"], #partsTable td .num, #partsTable td .qty, #partsTable td select,
+  #matTable td input[type="text"], #matTable td .num, #matTable td select { width: 100%; min-width: 0; }
+  #partsTable td:nth-child(1) { grid-column: span 6; }
+  #partsTable td:nth-child(2), #partsTable td:nth-child(3) { grid-column: span 3; }
+  #partsTable td:nth-child(4) { grid-column: span 2; }
+  #partsTable td:nth-child(5) { grid-column: span 4; }
+  #partsTable td:nth-child(6) { grid-column: span 4; }
+  #partsTable td:nth-child(7) { grid-column: span 2; }
+  #partsTable td:nth-child(8) { grid-column: span 4; }
+  #partsTable td.c { grid-column: span 2; text-align: center; }
+  #partsTable td.c input { margin: 4px auto 0; }
+  #partsTable td:last-child { grid-column: span 12; text-align: right; }
+  #matTable td:nth-child(1) { grid-column: span 12; }
+  #matTable td:nth-child(2), #matTable td:nth-child(3), #matTable td:nth-child(4) { grid-column: span 4; }
+  #matTable td:nth-child(5) { grid-column: span 6; }
+  #matTable td:nth-child(6) { grid-column: span 6; text-align: right; }
+  .tablebox { overflow-x: visible; }
+}
+@media (max-width: 560px) {
+  #partsTable td:nth-child(1) { grid-column: span 12; }
+  #partsTable td:nth-child(2), #partsTable td:nth-child(3) { grid-column: span 6; }
+  #partsTable td:nth-child(4) { grid-column: span 3; }
+  #partsTable td:nth-child(5) { grid-column: span 9; }
+  #partsTable td:nth-child(6) { grid-column: span 12; }
+  #partsTable td:nth-child(7), #partsTable td:nth-child(8) { grid-column: span 6; }
+  #partsTable td.c { grid-column: span 3; }
+  #matTable td:nth-child(2), #matTable td:nth-child(3) { grid-column: span 6; }
+  #matTable td:nth-child(4) { grid-column: span 12; }
+}
 .tip { position: fixed; z-index: 95; pointer-events: none; background: #1C1F22; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 13px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 260px; }
 .tip b { font-size: 14px; }
 .tip .tsz { font-family: var(--font-mono); font-size: 14px; color: #F2B11F; }
@@ -418,7 +464,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     <div class="panel-head"><h2 id="hFile">Файл на разкроя</h2><span class="hint">Запази целия разкрой във файл и го отвори на друг компютър.</span></div>
     <div class="settings">
             <div class="field"><span class="label">Запис</span><button id="saveFile" type="button" class="primary">Запази във файл</button> <button id="saveAs" type="button" hidden>Запази като… (избери папка)</button> <button id="saveCsv" type="button">Свали CSV (за OptiCut)</button></div>
-      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><input id="fileIn" type="file" accept=".kcut,.json,application/json" hidden></div>
+      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><input id="fileIn" type="file" accept=".kcut,.json,application/json,application/octet-stream,text/plain" hidden></div>
     </div>
     <div class="row-actions"><button id="filePanelClose" type="button" class="ghost keep">Затвори</button><button id="newProj" type="button" class="ghost keep">Нов празен разкрой</button><button id="restorePrev" type="button" class="ghost keep" hidden>Върни последната работа</button><button id="undoOpen" type="button" class="ghost keep" hidden>Върни предишното</button></div>
     <details class="list" id="textBox">
@@ -1839,13 +1885,19 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   /* ---------- Входни таблици ---------- */
   function renderMats() {
     $('#matBody').innerHTML = state.materials.map(function (m, i) {
-      return '<tr><td><input type="text" id="mn' + i + '" aria-label="Име на материал" data-t="m" data-i="' + i + '" data-f="name" value="' + esc(m.name) + '"></td>' +
-        '<td><input class="num" type="number" min="1" aria-label="Дължина на листа" data-t="m" data-i="' + i + '" data-f="L" value="' + m.L + '"></td>' +
-        '<td><input class="num" type="number" min="1" aria-label="Ширина на листа" data-t="m" data-i="' + i + '" data-f="W" value="' + m.W + '"></td>' +
+      return '<tr><td><input type="text" enterkeyhint="next" id="mn' + i + '" aria-label="Име на материал" data-t="m" data-i="' + i + '" data-f="name" value="' + esc(m.name) + '"></td>' +
+        '<td><input class="num" type="number" inputmode="decimal" enterkeyhint="next" min="1" aria-label="Дължина на листа" data-t="m" data-i="' + i + '" data-f="L" value="' + m.L + '"></td>' +
+        '<td><input class="num" type="number" inputmode="decimal" enterkeyhint="next" min="1" aria-label="Ширина на листа" data-t="m" data-i="' + i + '" data-f="W" value="' + m.W + '"></td>' +
         '<td><select aria-label="Шарка на материала" data-t="m" data-i="' + i + '" data-f="noGrain"><option value="0"' + (m.noGrain ? '' : ' selected') + '>Има шарка</option><option value="1"' + (m.noGrain ? ' selected' : '') + '>Без шарка</option></select></td>' +
-        '<td><input class="num" type="number" min="0" step="0.01" aria-label="Цена на лист" data-t="m" data-i="' + i + '" data-f="price" value="' + (m.price === '' ? '' : m.price) + '" placeholder="по избор"></td>' +
+        '<td><input class="num" type="number" inputmode="decimal" enterkeyhint="next" min="0" step="0.01" aria-label="Цена на лист" data-t="m" data-i="' + i + '" data-f="price" value="' + (m.price === '' ? '' : m.price) + '" placeholder="по избор"></td>' +
         '<td style="white-space:nowrap"><button type="button" class="ghost keep" data-preset="' + i + '" title="Запомни името и размера на листа в списъка с често ползвани плоскости">В списъка</button>' + (state.materials.length > 1 ? '<button type="button" class="ghost" data-del="m" data-i="' + i + '" aria-label="Премахни материала">Махни</button>' : '') + '</td></tr>';
     }).join('');
+    labelCells('#matBody', ['Име', 'Дължина на листа', 'Ширина на листа', 'Шарка', 'Цена на лист', '']);
+  }
+  function labelCells(sel, labels) {
+    document.querySelectorAll(sel + ' tr').forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) { if (labels[i]) td.setAttribute('data-l', labels[i]); });
+    });
   }
   var GRP_LET = 'АБВГДЕЖЗИКЛМНОПРСТУФ'.split('');
   function grpOpts(sel) {
@@ -1864,10 +1916,10 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var opts = function (sel) { return (state.materials.length ? '' : '<option value="" selected>— няма материал —</option>') + state.materials.map(function (m) { return '<option value="' + m.id + '"' + (m.id === sel ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '<option value="__new">+ Нов материал…</option>'; };
     $('#partBody').innerHTML = state.parts.map(function (p, i) {
       var ck = function (j, lab) { return '<td class="c"><input type="checkbox" aria-label="Кант ' + lab + '" data-t="p" data-i="' + i + '" data-f="e' + j + '"' + (p.e[j] ? ' checked' : '') + '></td>'; };
-      return '<tr><td><input type="text" aria-label="Име на детайла" data-t="p" data-i="' + i + '" data-f="name" value="' + esc(p.name) + '"></td>' +
-        '<td><input class="num" type="number" min="1" aria-label="Дължина" data-t="p" data-i="' + i + '" data-f="L" value="' + p.L + '"></td>' +
-        '<td><input class="num" type="number" min="1" aria-label="Ширина" data-t="p" data-i="' + i + '" data-f="W" value="' + p.W + '"></td>' +
-        '<td><input class="qty" type="number" min="1" step="1" aria-label="Брой" data-t="p" data-i="' + i + '" data-f="q" value="' + p.q + '"></td>' +
+      return '<tr><td><input type="text" enterkeyhint="next" aria-label="Име на детайла" data-t="p" data-i="' + i + '" data-f="name" value="' + esc(p.name) + '"></td>' +
+        '<td><input class="num" type="number" inputmode="decimal" enterkeyhint="next" min="1" aria-label="Дължина" data-t="p" data-i="' + i + '" data-f="L" value="' + p.L + '"></td>' +
+        '<td><input class="num" type="number" inputmode="decimal" enterkeyhint="next" min="1" aria-label="Ширина" data-t="p" data-i="' + i + '" data-f="W" value="' + p.W + '"></td>' +
+        '<td><input class="qty" type="number" inputmode="decimal" enterkeyhint="next" min="1" step="1" aria-label="Брой" data-t="p" data-i="' + i + '" data-f="q" value="' + p.q + '"></td>' +
         '<td><select aria-label="Материал" data-t="p" data-i="' + i + '" data-f="mat">' + opts(p.mat) + '</select></td>' +
         '<td><select aria-label="Посока на детайла" data-t="p" data-i="' + i + '" data-f="dir"><option value="auto"' + (p.dir === 'auto' || !p.dir ? ' selected' : '') + '>Според материала</option><option value="fix"' + (p.dir === 'fix' ? ' selected' : '') + '>По шарката</option><option value="rot"' + (p.dir === 'rot' ? ' selected' : '') + '>Може да се върти</option></select></td>' +
         '<td><select aria-label="Група за продължение на шарката" data-t="p" data-i="' + i + '" data-f="grp">' + grpOpts(p.grp) + '</select></td>' +
@@ -1875,6 +1927,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
         ck(0, 'Д1') + ck(1, 'Д2') + ck(2, 'Ш1') + ck(3, 'Ш2') +
         '<td><button type="button" class="ghost" data-del="p" data-i="' + i + '" aria-label="Премахни детайла">Махни</button></td></tr>';
     }).join('');
+    labelCells('#partBody', ['Тип детайл', 'Дължина', 'Ширина', 'Бр.', 'Материал', 'Посока', 'Група', 'Ред в групата', 'Д1', 'Д2', 'Ш1', 'Ш2', '']);
   }
   function syncSettings() {
     $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
@@ -2043,6 +2096,15 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       } else { state.parts.splice(i, 1); renderParts(); }
       schedule();
     });
+  });
+  // На таблет (екранна клавиатура) Enter/„Напред“ минава на следващото поле на реда.
+  $('#partBody').addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (e.key !== 'Enter' || !t || !(t.tagName === 'INPUT' && t.type !== 'checkbox')) return;
+    if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) return;
+    var f = Array.prototype.filter.call($('#partBody').querySelectorAll('input, select'), function (x) { return !x.disabled && x.offsetParent !== null; });
+    var i = f.indexOf(t);
+    if (i >= 0 && i < f.length - 1) { e.preventDefault(); f[i + 1].focus(); if (f[i + 1].select) { try { f[i + 1].select(); } catch (err) {} } }
   });
   // Enter върху отметка за кант = сложи/махни отметката (като интервала), за да се въвежда само от клавиатурата.
   $('#partBody').addEventListener('keydown', function (e) {
@@ -2290,7 +2352,40 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var m = svg.getScreenCTM(); if (!m) return;
     v.x -= dx / m.a; v.y -= dy / m.d; clampView(v, baseVB(svg)); applyZoom(host, key);
   }
+  // Увеличение с два пръста (и придвижване), за таблет.
+  function wirePinch(host, key) {
+    var ptrs = {}, n = 0, base = null, swallow = false;
+    function mid() { var a = Object.keys(ptrs).map(function (k) { return ptrs[k]; }); return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1 }; }
+    host.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'touch') return;
+      if (!ptrs[e.pointerId]) n++;
+      ptrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (n === 2) {
+        base = mid(); swallow = true;
+        if (typeof ed !== 'undefined' && key === 'ed' && ed.drag) { ed.drag = null; ed.pan = null; edDraw(); }
+      }
+      if (swallow) e.stopPropagation();
+    }, true);
+    host.addEventListener('pointermove', function (e) {
+      if (!ptrs[e.pointerId]) return;
+      ptrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (n >= 2 && base) {
+        var m = mid();
+        panBy(host, key, m.x - base.x, m.y - base.y);
+        if (Math.abs(m.d / base.d - 1) > 0.005) zoomAt(host, key, m.d / base.d, m.x, m.y);
+        base = m; e.stopPropagation(); e.preventDefault();
+      } else if (swallow) e.stopPropagation();
+    }, true);
+    function up(e) {
+      if (!ptrs[e.pointerId]) return;
+      delete ptrs[e.pointerId]; n = Math.max(0, n - 1); base = null;
+      if (swallow) { e.stopPropagation(); if (n === 0) swallow = false; }
+    }
+    host.addEventListener('pointerup', up, true);
+    host.addEventListener('pointercancel', up, true);
+  }
   function wireZoom(host, key, ids) {
+    wirePinch(host, key);
     host.addEventListener('wheel', function (e) { e.preventDefault(); zoomAt(host, key, e.deltaY < 0 ? 1.25 : 1 / 1.25, e.clientX, e.clientY); }, { passive: false });
     $(ids[0]).addEventListener('click', function () { zoomAt(host, key, 1 / 1.4); });
     $(ids[1]).addEventListener('click', function () { zoomAt(host, key, 1.4); });
@@ -2933,7 +3028,15 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   async function saveDownload(txt) {
     var msg = $('#fileMsg'), dl = null;
     try { dl = (window.claude && window.claude.use) ? await window.claude.use('downloads') : null; } catch (err) { dl = null; }
-    if (!dl) { showText(txt); msg.textContent = 'Записът във файл не е наличен в този изглед. Данните са показани като текст по-долу, копирай ги.'; return; }
+    if (!dl) {
+      try {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/octet-stream' }));
+        a.download = fileName().replace(/[\\\/:*?"<>|]+/g, ' ').trim() || 'razkroy.kcut';
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        markClean(); msg.textContent = 'Файлът „' + a.download + '“ е свален в „Изтеглени“. Този браузър не може да презаписва файла, затова всеки запис е нов файл.';
+      } catch (err) { showText(txt); msg.textContent = 'Записът във файл не е наличен. Данните са показани като текст по-долу, копирай ги.'; }
+      return;
+    }
     try {
       await dl.save({ filename: fileName(), data: txt }); markClean();
       msg.textContent = 'Файлът „' + fileName() + '“ е запазен чрез браузъра. Ако не си избрал папка, намери го в „Изтеглени“. За да избираш папка всеки път, включи в браузъра „Питай къде да се запази всеки файл“.';
@@ -3033,7 +3136,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '72';
+  var APP_VERSION = '73';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -3129,6 +3232,3 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   })();
 })();
 </script>
-
-<script>if ("serviceWorker" in navigator) { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); }); }</script>
-</html>
