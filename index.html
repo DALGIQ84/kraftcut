@@ -305,7 +305,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
           <button type="button" role="menuitem" data-do="saveFile">Запази</button>
           <button type="button" role="menuitem" data-do="saveAs">Запази като… (избери папка)</button>
           <button type="button" role="menuitem" data-do="saveCsv">Свали CSV (за OptiCut)</button>
-          <button type="button" role="menuitem" data-do="print">Печат / PDF за цеха…</button>
+          <button type="button" role="menuitem" data-do="print">Печат за цеха…</button>
+          <button type="button" role="menuitem" data-do="pdf">Запази като PDF за цеха…</button>
           <hr>
           <button type="button" role="menuitem" data-do="undoOpen" data-hid="undoOpen">Върни предишното</button>
           <button type="button" role="menuitem" data-do="astext">Запази или отвори като текст…</button>
@@ -2437,11 +2438,18 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     $('#printArea').innerHTML = h;
     return true;
   }
-  function doPrint() {
+  function doPrint(asPdf) {
     if (!buildPrint()) { $('#fileMsg').textContent = 'Още няма разкрой за печат.'; return; }
-    var done = function () { $('#printArea').innerHTML = ''; window.removeEventListener('afterprint', done); };
+    var oldTitle = document.title;
+    var done = function () { $('#printArea').innerHTML = ''; document.title = oldTitle; window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
-    setTimeout(function () { try { window.print(); } catch (e) { $('#fileMsg').textContent = 'Печатът не е наличен в този изглед.'; } }, 60);
+    if (asPdf) {
+      // Името на PDF файла се взима от заглавието на страницата.
+      var d = new Date(), nm = (String(state.name || '').trim() || 'Разкрой').replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      document.title = nm + ' - разкрой ' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+      $('#fileMsg').textContent = 'В прозореца за печат избери „Запази като PDF“ (Save as PDF).';
+    }
+    setTimeout(function () { try { window.print(); } catch (e) { $('#fileMsg').textContent = 'Печатът не е наличен в този изглед.'; done(); } }, asPdf ? 700 : 60);
   }
 
 
@@ -2693,7 +2701,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '63';
+  var APP_VERSION = '64';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -2726,7 +2734,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       if (!act) return;
       closeAll();
       if (act === 'astext') { var fp = g('filePanel'); fp.hidden = false; g('textBox').open = true; fp.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      if (act === 'print') { doPrint(); return; }
+      if (act === 'print') { doPrint(false); return; }
+      if (act === 'pdf') { doPrint(true); return; }
       if (act === 'cuts') { var c = g('showCuts'); if (c) c.click(); return; }
       var o = g(act); if (o) o.click();
     });
