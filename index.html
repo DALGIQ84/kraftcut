@@ -251,6 +251,42 @@ body { padding-top: 0; padding-inline: 0; }
 .mpop.wide { left: 16px; right: 16px; top: calc(100% + 2px); min-width: 0; max-width: 860px; padding: 0; max-height: calc(100vh - 90px); overflow: auto; display: none; }
 .menu.open > .mpop.wide { display: block; }
 .mpop.wide .panel { border: 0; border-radius: 8px; }
+
+.ed-info { font-size: 13px; display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: center; min-height: 20px; }
+.ed-info .warn { color: var(--warn); font-weight: 600; }
+.ed-info .okk { color: var(--accent-text); font-weight: 600; }
+.ed-help { font-size: 12px; }
+.ed-body svg.board { touch-action: none; user-select: none; -webkit-user-select: none; }
+svg .edhit { fill: transparent; stroke: none; cursor: grab; }
+svg .edhit:hover { fill: rgba(242, 177, 31, 0.16); }
+svg .edhit.sel { fill: rgba(242, 177, 31, 0.28); stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; cursor: grabbing; }
+svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
+.noguil { color: var(--warn); }
+@media print { .ed { display: none !important; } }
+
+#printArea { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 9mm; }
+  body > *:not(#printArea) { display: none !important; }
+  html { border-top: 0 !important; }
+  body { background: #fff !important; padding: 0 !important; color: #111; }
+  #printArea { display: block !important; }
+  .pp { --bg: #fff; --surface: #fff; --ink: #111; --muted: #444; --line: #bbb; --board: #EDE3CC; --edge: #15202D; --ps: 38%; --pl: 76%; --accent-text: #6b4600;
+    break-after: page; page-break-after: always; display: grid; grid-template-columns: minmax(0, 1fr) 64mm; grid-template-rows: auto minmax(0, 1fr) auto; gap: 3mm 5mm; height: 189mm; overflow: hidden;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: var(--font-body); font-size: 9pt; }
+  .pp:last-child { break-after: auto; page-break-after: auto; }
+  .pph { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 8mm; border-bottom: 0.6mm solid #F2B11F; padding-bottom: 1.5mm; font-size: 11pt; }
+  .pph b { font-family: var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+  .pp svg.board { width: 100%; height: auto; max-height: 160mm; align-self: start; }
+  .ppt { font-size: 7.5pt; line-height: 1.25; overflow: hidden; }
+  .ppt table { width: 100%; border-collapse: collapse; }
+  .ppt th, .ppt td { text-align: left; padding: 0.4mm 1.2mm; border-bottom: 0.2mm solid #ccc; white-space: nowrap; }
+  .ppt th { font-size: 7pt; text-transform: uppercase; color: #444; }
+  .ppt td:nth-child(2) { max-width: 27mm; overflow: hidden; text-overflow: ellipsis; }
+  .ppt.many { font-size: 6.4pt; line-height: 1.1; }
+  .ppt.many th, .ppt.many td { padding: 0.2mm 1mm; }
+  .ppm { grid-column: 1 / -1; font-size: 8.5pt; color: #333; }
+}
 </style>
 
 <nav class="topbar" id="topbar" aria-label="Главно меню">
@@ -268,6 +304,7 @@ body { padding-top: 0; padding-inline: 0; }
           <button type="button" role="menuitem" data-do="saveFile">Запази</button>
           <button type="button" role="menuitem" data-do="saveAs">Запази като… (избери папка)</button>
           <button type="button" role="menuitem" data-do="saveCsv">Свали CSV (за OptiCut)</button>
+          <button type="button" role="menuitem" data-do="print">Печат / PDF за цеха…</button>
           <hr>
           <button type="button" role="menuitem" data-do="undoOpen" data-hid="undoOpen">Върни предишното</button>
           <button type="button" role="menuitem" data-do="astext">Запази или отвори като текст…</button>
@@ -430,6 +467,26 @@ body { padding-top: 0; padding-inline: 0; }
   </div>
 </div>
 
+<div id="printArea" aria-hidden="true"></div>
+
+<div id="ed" class="fs ed" role="dialog" aria-modal="true" aria-label="Редактор на листа" hidden>
+  <div class="fs-bar">
+    <div class="fs-title"><span id="edTitle"></span><span id="edMeta" class="mono hint" style="text-transform:none;letter-spacing:0;font-weight:400;font-size:13px"></span></div>
+    <div class="row-actions">
+      <button id="edPrev" type="button">‹</button>
+      <button id="edNext" type="button">›</button>
+      <button id="edRot" type="button" title="Завърти избрания детайл (R)">Завърти</button>
+      <label class="hint" style="display:inline-flex;align-items:center;gap:6px">Премести на <select id="edTo" aria-label="Премести избрания детайл на друг лист"></select></label>
+      <button id="edUndo" type="button" title="Ctrl+Z">Върни</button>
+      <button id="edAuto" type="button" title="Връща автоматичната подредба на материала">Автоматично</button>
+      <button id="edDone" type="button" class="primary">Готово</button>
+    </div>
+  </div>
+  <div id="edInfo" class="ed-info"></div>
+  <div id="edBody" class="fs-body ed-body"></div>
+  <div class="hint ed-help">Хвани детайл и го премести. Залепва за ръбовете на другите детайли и за листа. Стрелките го движат на 1 мм (Shift = 10 мм), R го завърта, Ctrl+Z връща.</div>
+</div>
+
 <div id="fs" class="fs" role="dialog" aria-modal="true" aria-label="Схема на рязане на цял екран" hidden>
   <div class="fs-bar">
     <div class="fs-title"><span id="fsTitle"></span><span id="fsMeta" class="mono hint" style="text-transform:none;letter-spacing:0;font-weight:400;font-size:13px"></span></div>
@@ -455,7 +512,8 @@ body { padding-top: 0; padding-inline: 0; }
       name: '',
       s: { kerf: 4, trim: 10, trimSide: 'all', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
       materials: [],
-      parts: []
+      parts: [],
+      manual: {}
     };
   }
   var PREVKEY = 'razkroy-prev-v1', loadedBefore = load(), state = defaults();
@@ -1259,6 +1317,104 @@ body { padding-top: 0; padding-inline: 0; }
       return c;
     });
   }
+
+  /* ---------- Ръчна подредба: помощни функции ---------- */
+  // Свободните правоъгълници на листа след поставените детайли (с ширината на разреза).
+  function freeRects(b, items) {
+    var K = b.k, free = [{ x: 0, y: 0, w: b.W + K, h: b.H + K }];
+    items.forEach(function (it) {
+      var r = { x: it.x, y: it.y, w: it.w + K, h: it.h + K }, next = [];
+      free.forEach(function (f) {
+        if (r.x >= f.x + f.w || r.x + r.w <= f.x || r.y >= f.y + f.h || r.y + r.h <= f.y) { next.push(f); return; }
+        if (r.x > f.x) next.push({ x: f.x, y: f.y, w: r.x - f.x, h: f.h });
+        if (r.x + r.w < f.x + f.w) next.push({ x: r.x + r.w, y: f.y, w: f.x + f.w - r.x - r.w, h: f.h });
+        if (r.y > f.y) next.push({ x: f.x, y: f.y, w: f.w, h: r.y - f.y });
+        if (r.y + r.h < f.y + f.h) next.push({ x: f.x, y: r.y + r.h, w: f.w, h: f.y + f.h - r.y - r.h });
+      });
+      free = next.filter(function (a, i) {
+        return !next.some(function (b2, j) { return j !== i && b2.x <= a.x && b2.y <= a.y && b2.x + b2.w >= a.x + a.w && b2.y + b2.h >= a.y + a.h && (j < i || b2.w * b2.h > a.w * a.h || b2.x !== a.x || b2.y !== a.y || b2.w !== a.w || b2.h !== a.h); });
+      });
+    });
+    return free;
+  }
+  // Може ли листът да се среже само с прави срезове през целия остатък (както реже трионът)?
+  function guilloOk(items, k) {
+    function groupsOn(it, ax) {
+      var s = ax === 'x' ? 'x' : 'y', d = ax === 'x' ? 'w' : 'h';
+      var a = it.slice().sort(function (p, q) { return p[s] - q[s]; }), gs = [], cur = [a[0]], end = a[0][s] + a[0][d];
+      for (var i = 1; i < a.length; i++) {
+        if (a[i][s] >= end + k - 0.01) { gs.push(cur); cur = [a[i]]; end = a[i][s] + a[i][d]; }
+        else { cur.push(a[i]); end = Math.max(end, a[i][s] + a[i][d]); }
+      }
+      gs.push(cur);
+      return gs;
+    }
+    function ok(it, depth) {
+      if (it.length < 2) return true;
+      if (depth > 60) return false;
+      var gx = groupsOn(it, 'x');
+      if (gx.length >= 2) return gx.every(function (g) { return ok(g, depth + 1); });
+      var gy = groupsOn(it, 'y');
+      if (gy.length >= 2) return gy.every(function (g) { return ok(g, depth + 1); });
+      return false;
+    }
+    return ok(items, 0);
+  }
+  // Лист от ръчно поставени детайли: list = [{ p, x, y, r }].
+  function placedBin(list, W, H, k, mode, trimOn, gmap) {
+    var b = { W: W, H: H, k: k, cfg: { algo: 'man' }, free: [], rects: [], items: [], used: 0, cut: 0 };
+    list.forEach(function (o) {
+      var p = o.p, r = !!o.r;
+      b.items.push({ p: p, x: o.x, y: o.y, w: r ? p.h : p.w, h: r ? p.w : p.h, r: r, gid: (gmap && gmap[p.n]) || 0 });
+      b.used += p.w * p.h;
+    });
+    var boxes = {};
+    b.items.forEach(function (it) {
+      if (!it.gid) return;
+      var q = boxes[it.gid] || (boxes[it.gid] = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 });
+      q.x0 = Math.min(q.x0, it.x); q.y0 = Math.min(q.y0, it.y); q.x1 = Math.max(q.x1, it.x + it.w); q.y1 = Math.max(q.y1, it.y + it.h);
+    });
+    b.items.forEach(function (it) { if (it.gid) { var q = boxes[it.gid]; it.grp = { x: q.x0, y: q.y0, w: q.x1 - q.x0, h: q.y1 - q.y0, id: it.gid }; } });
+    var cl = 0;
+    if (!b.items.length) cl = 0;
+    else if (mode === 'saw') {
+      cutPlan(b).forEach(function (c) { cl += c.b - c.a; });
+      if (trimOn) {
+        var wu = 0, hu = 0;
+        b.items.forEach(function (it) { wu = Math.max(wu, it.x + it.w); hu = Math.max(hu, it.y + it.h); });
+        cl += trimOn * Math.min(W + hu, H + wu);
+      }
+      b.noGuil = !guilloOk(b.items, k);
+    } else cl = unionPerimeter(b);
+    b.cutLen = cl;
+    b.free = freeRects(b, b.items); b.remnant = binRemnant(b);
+    return b;
+  }
+  function buildManual(man, fit, W, H, k, mode, trimOn) {
+    if (!man || !Array.isArray(man.sheets)) return null;
+    var byN = {}, gmap = {}, count = 0, seen = {}, bins = [], ok = true;
+    fit.forEach(function (p) {
+      if (p.comp) p.comp.forEach(function (m) { byN[m.n] = m; gmap[m.n] = p.n; count++; });
+      else { byN[p.n] = p; count++; }
+    });
+    man.sheets.forEach(function (sh) {
+      if (!ok) return;
+      var list = [];
+      (sh || []).forEach(function (o) {
+        var p = byN[o.n];
+        if (!p || seen[o.n]) { ok = false; return; }
+        seen[o.n] = 1;
+        var w = o.r ? p.h : p.w, h = o.r ? p.w : p.h;
+        if (o.r && !p.rot) { ok = false; return; }
+        if (!(o.x >= -0.01 && o.y >= -0.01 && o.x + w <= W + 0.01 && o.y + h <= H + 0.01)) { ok = false; return; }
+        list.push({ p: p, x: o.x, y: o.y, r: !!o.r });
+      });
+      if (list.length) bins.push(placedBin(list, W, H, k, mode, trimOn, gmap));
+    });
+    if (!ok || Object.keys(seen).length !== count) return null;
+    return bins;
+  }
+
   function compute(budget) {
     var s = state.s, k = Math.max(0, +s.kerf || 0), trim = Math.max(0, +s.trim || 0), prio = s.prio || 'balance';
     var matById = {}; state.materials.forEach(function (m) { matById[m.id] = m; });
@@ -1303,7 +1459,7 @@ body { padding-top: 0; padding-inline: 0; }
       nest -= 2 * (mw + th);
       out.push({ n: g.list[0].n, name: 'Група ' + g.gk + ' (' + g.list.length + ' детайла)', w: mw, h: th, L: mw, W: th, rot: false, e: [0, 0, 0, 0], hue: g.list[0].hue, comp: g.list, gk: g.gk, sawExtra: saw, nestExtra: Math.max(0, nest) });
     });
-    var res = [], totalSheets = 0, usedArea = 0, boardArea = 0, cost = 0, anyPrice = false, totalCut = 0;
+    var res = [], totalSheets = 0, usedArea = 0, boardArea = 0, cost = 0, anyPrice = false, totalCut = 0, notes = [];
     activeSolvers = [];
     state.materials.forEach(function (m) {
       var list = groups[m.id];
@@ -1314,9 +1470,18 @@ body { padding-top: 0; padding-inline: 0; }
         var ok = (p.w <= W && p.h <= H) || (p.rot && p.h <= W && p.w <= H);
         (ok ? fit : bad).push(p);
       });
-      var bins = [], algo = '';
+      var bins = [], algo = '', manualOn = false, sigH = '';
       if (W > 0 && H > 0 && fit.length) {
         var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0]);
+        sigH = sigHash(sig);
+        var man = state.manual && state.manual[m.id];
+        if (man) {
+          var mb = man.h === sigH ? buildManual(man, fit, W, H, k, s.mode, trim > 0 ? tn : 0) : null;
+          if (mb) { bins = mb; manualOn = true; }
+          else { delete state.manual[m.id]; notes.push('Ръчната подредба на „' + esc(m.name) + '“ е махната, защото детайлите или настройките са променени.'); save(); }
+        }
+      }
+      if (W > 0 && H > 0 && fit.length && !manualOn) {
         var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big');
         st.matId = m.id;
         if (pendingLayout) {
@@ -1338,9 +1503,9 @@ body { padding-top: 0; padding-inline: 0; }
       bins.forEach(function (b) { matUsed += b.used; matCut += b.cutLen || 0; });
       totalSheets += bins.length; usedArea += matUsed; boardArea += bins.length * ML * MW; totalCut += matCut;
       if (+m.price > 0) { anyPrice = true; cost += bins.length * +m.price; }
-      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0), cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo });
+      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0), cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn });
     });
-    return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut };
+    return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut, notes: notes };
   }
 
   /* ---------- Чертеж ---------- */
@@ -1468,7 +1633,7 @@ body { padding-top: 0; padding-inline: 0; }
       var ip = Math.max(3, Math.min(ins, Math.min(it.w, it.h) * 0.12));
       o += edgeLines(it, x, y, ip) + pieceLabel(it, x, y, ip) + '</g>';
     });
-    if (showCuts) {
+    if (showCuts && !bin._nocuts && !bin.noGuil) {
       var rr = Math.max(14, Math.round(ML / 95)), fs = rr * 1.25;
       cutPlan(bin).forEach(function (c) {
         var x1 = c.v ? c.x : c.a, y1 = c.v ? c.a : c.y, x2 = c.v ? c.x : c.b, y2 = c.v ? c.b : c.y;
@@ -1501,6 +1666,7 @@ body { padding-top: 0; padding-inline: 0; }
         probs.push('Не се събират в лист „' + esc(g.m.name) + '“ (' + fmt(g.W) + '×' + fmt(g.H) + ' мм след обрезката): ' + esc(Object.keys(names).join(', ')) + '. Тези детайли са извън разкроя.');
       }
     });
+    (r.notes || []).forEach(function (n) { probs.push(n); });
     $('#status').innerHTML = probs.map(function (p) { return '<div class="problem" style="margin-bottom:6px">' + p + '</div>'; }).join('');
 
     var h = '<div class="summary">';
@@ -1514,12 +1680,12 @@ body { padding-top: 0; padding-inline: 0; }
     h += '<div class="legend" style="margin-top:12px"><span><i></i>кантирана страна</span><span><u></u>обрезка по ръба</span><span>Пунктирана рамка с размер = остатък.</span><span><b class="grplg"></b>дебела прекъсната рамка = група (шарката продължава от чело на чело)</span><span>В детайла е видът му (името) и размерът дължина × ширина. Ако името не се събира, е съкратено.</span></div>';
 
     r.res.forEach(function (g, gi) {
-      h += '<div class="matblock" style="margin-top:22px"><div class="mathead"><h3>' + esc(g.m.name) + '</h3><span class="hint mono">' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм · ' + g.bins.length + ' ' + (g.bins.length === 1 ? 'лист' : 'листа') + ' · ' + g.count + ' детайла · ' + (g.m.noGrain ? 'без шарка, детайлите се въртят' : 'по шарката') + (g.algo ? ' · подредба: ' + ALGO[g.algo] : '') + '</span></div>';
+      h += '<div class="matblock" style="margin-top:22px"><div class="mathead"><h3>' + esc(g.m.name) + '</h3><span class="hint mono">' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм · ' + g.bins.length + ' ' + (g.bins.length === 1 ? 'лист' : 'листа') + ' · ' + g.count + ' детайла · ' + (g.m.noGrain ? 'без шарка, детайлите се въртят' : 'по шарката') + (g.algo ? ' · подредба: ' + ALGO[g.algo] : '') + (g.manual ? ' · <b>ръчна подредба</b>' : '') + '</span>' + (g.manual ? '<button type="button" class="fsbtn" data-auto="' + gi + '">Върни автоматичната</button>' : '') + '</div>';
       h += '<div class="sheetgrid' + (g.bins.length > 1 ? '' : '') + '">';
       g.bins.forEach(function (b, bi) {
         var oc = offcut(b), area = (+g.m.L) * (+g.m.W);
-        h += '<article class="sheet"><div class="sheet-top"><span class="t">Лист ' + (bi + 1) + ' от ' + g.bins.length + '</span><button type="button" class="fsbtn" data-fs="' + gi + '-' + bi + '">На цял екран</button>';
-        h += '<span class="m mono">използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м' + (oc ? ' · остатък ≈ ' + fmt(oc.w) + '×' + fmt(oc.h) : '') + '</span></div>';
+        h += '<article class="sheet"><div class="sheet-top"><span class="t">Лист ' + (bi + 1) + ' от ' + g.bins.length + '</span><button type="button" class="fsbtn" data-fs="' + gi + '-' + bi + '">На цял екран</button>' + (g.sigH ? '<button type="button" class="fsbtn" data-ed="' + gi + '-' + bi + '">Редактирай</button>' : '');
+        h += '<span class="m mono">използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м' + (oc ? ' · остатък ≈ ' + fmt(oc.w) + '×' + fmt(oc.h) : '') + (b.noGuil ? ' · <b class="noguil">⚠ не се реже с трион</b>' : '') + '</span></div>';
         h += sheetSVG(b, g);
         h += '<details class="list"><summary>Опис на детайлите (' + b.items.length + ')</summary><div class="tablebox"><table><thead><tr><th>№</th><th>Име</th><th>Дължина</th><th>Ширина</th><th>Позиция</th><th>Кант</th></tr></thead><tbody>';
         b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; }).forEach(function (it) {
@@ -1981,11 +2147,299 @@ body { padding-top: 0; padding-inline: 0; }
   });
   document.addEventListener('fullscreenchange', function () { if (fsReal && !document.fullscreenElement) fsClose(); });
 
+
+  /* ---------- Редактор на листа ---------- */
+  var ed = { gi: 0, idx: 0, sel: null, drag: null, undo: [], gmap: {}, groups: {}, msg: '', raf: 0 };
+  function edG() { return (lastResult && lastResult.res[ed.gi]) || null; }
+  function edBuildMaps(g) {
+    ed.gmap = {}; ed.groups = {};
+    (g.fit || []).forEach(function (p) {
+      if (!p.comp) return;
+      var ids = []; p.comp.forEach(function (m) { ed.gmap[m.n] = p.n; ids.push(m.n); });
+      ed.groups[p.n] = ids;
+    });
+  }
+  function edMembers(n) { var gid = ed.gmap[n]; return gid ? ed.groups[gid].slice() : [n]; }
+  function edSheets(g) { return g.bins.map(function (b) { return b.items.map(function (it) { return { n: it.p.n, x: it.x, y: it.y, r: !!it.r }; }); }); }
+  function edOpen(gi, bi) {
+    var g = lastResult && lastResult.res[gi]; if (!g || !g.sigH) return;
+    ed.gi = gi; ed.idx = bi; ed.sel = null; ed.drag = null; ed.undo = []; ed.msg = ''; edBuildMaps(g);
+    $('#ed').hidden = false; document.body.style.overflow = 'hidden';
+    edDraw();
+  }
+  function edClose() {
+    if ($('#ed').hidden) return;
+    $('#ed').hidden = true; document.body.style.overflow = ''; ed.drag = null; ed.sel = null;
+  }
+  // Проверка: в листа ли са детайлите и има ли разстояние (ширината на разреза) между тях.
+  function edBad(items, k, W, H, moving) {
+    var bad = false;
+    items.forEach(function (a) {
+      if (!moving[a.n]) return;
+      if (a.x < -0.01 || a.y < -0.01 || a.x + a.w > W + 0.01 || a.y + a.h > H + 0.01) { bad = true; return; }
+      items.forEach(function (o) {
+        if (o === a || bad) return;
+        if (!(a.x + a.w + k <= o.x + 0.01 || o.x + o.w + k <= a.x + 0.01 || a.y + a.h + k <= o.y + 0.01 || o.y + o.h + k <= a.y + 0.01)) bad = true;
+      });
+    });
+    return bad;
+  }
+  function edItems(bin) { return bin.items.map(function (it) { return { n: it.p.n, p: it.p, x: it.x, y: it.y, w: it.w, h: it.h, r: !!it.r }; }); }
+  function edBin(g, items) {
+    return placedBin(items.map(function (o) { return { p: o.p, x: o.x, y: o.y, r: o.r }; }), g.W, g.H, g.k, lastResult.mode, g.tn && g.trim > 0 ? g.tn : 0, ed.gmap);
+  }
+  // Новото място при влачене: залепва за ръбовете на другите детайли и за листа.
+  function edCalc(dx, dy, snapT) {
+    var g = edG(), bin = g.bins[ed.idx], k = g.k, W = g.W, H = g.H;
+    var items = edItems(bin), mv = {}; ed.sel.forEach(function (n) { mv[n] = 1; });
+    var mem = items.filter(function (it) { return mv[it.n]; });
+    if (!mem.length) return null;
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    mem.forEach(function (it) { x0 = Math.min(x0, it.x); y0 = Math.min(y0, it.y); x1 = Math.max(x1, it.x + it.w); y1 = Math.max(y1, it.y + it.h); });
+    var bw = x1 - x0, bh = y1 - y0, px = x0 + dx, py = y0 + dy, nx = px, ny = py;
+    if (snapT > 0) {
+      var cx = [0, W - bw], cy = [0, H - bh];
+      items.forEach(function (o) {
+        if (mv[o.n]) return;
+        cx.push(o.x + o.w + k, o.x - k - bw, o.x, o.x + o.w - bw);
+        cy.push(o.y + o.h + k, o.y - k - bh, o.y, o.y + o.h - bh);
+      });
+      var bd = snapT; cx.forEach(function (c) { if (Math.abs(c - px) < bd) { bd = Math.abs(c - px); nx = c; } });
+      bd = snapT; cy.forEach(function (c) { if (Math.abs(c - py) < bd) { bd = Math.abs(c - py); ny = c; } });
+    }
+    nx = Math.round(nx * 10) / 10; ny = Math.round(ny * 10) / 10;
+    var ox = nx - x0, oy = ny - y0;
+    items.forEach(function (it) { if (mv[it.n]) { it.x += ox; it.y += oy; } });
+    return { items: items, ox: ox, oy: oy, bad: edBad(items, k, W, H, mv) };
+  }
+  function edCommit(sheets) {
+    var g = edG(); if (!g || !g.sigH) return;
+    state.manual = state.manual || {};
+    ed.undo.push(JSON.stringify(state.manual[g.m.id] || null)); if (ed.undo.length > 100) ed.undo.shift();
+    state.manual[g.m.id] = { h: g.sigH, sheets: sheets.filter(function (sh) { return sh.length; }) };
+    save(); edRefresh();
+  }
+  function edRefresh() { render(compute(0)); edDraw(); }
+  function edApply(res) {
+    var g = edG(), sheets = edSheets(g), sh = sheets[ed.idx], mv = {};
+    ed.sel.forEach(function (n) { mv[n] = 1; });
+    res.items.forEach(function (it) { if (mv[it.n]) { sh.forEach(function (o) { if (o.n === it.n) { o.x = it.x; o.y = it.y; o.r = it.r; } }); } });
+    edCommit(sheets);
+  }
+  function edNudge(dx, dy) {
+    if (!ed.sel) return;
+    var res = edCalc(dx, dy, 0);
+    if (!res) return;
+    if (res.bad) { ed.msg = 'Там не може: излиза от листа или опира в друг детайл.'; edDraw(); return; }
+    ed.msg = ''; edApply(res);
+  }
+  function edRotate() {
+    var g = edG(); if (!g || !ed.sel || ed.sel.length !== 1) return;
+    var bin = g.bins[ed.idx], items = edItems(bin), it = items.filter(function (o) { return o.n === ed.sel[0]; })[0];
+    if (!it) return;
+    if (!it.p.rot) { ed.msg = 'Този детайл е по шарката и не се върти.'; edDraw(); return; }
+    var w = it.w, h = it.h, mv = {}; mv[it.n] = 1;
+    var tries = [[it.x, it.y], [it.x + w - h, it.y], [it.x, it.y + h - w], [it.x + w - h, it.y + h - w]];
+    for (var i = 0; i < tries.length; i++) {
+      var c = items.map(function (o) { return o === it ? { n: o.n, p: o.p, x: tries[i][0], y: tries[i][1], w: h, h: w, r: !o.r } : o; });
+      if (!edBad(c, g.k, g.W, g.H, mv)) { ed.msg = ''; edApply({ items: c }); return; }
+    }
+    ed.msg = 'Завъртян не се събира тук.'; edDraw();
+  }
+  function edSpot(items, bw, bh, k, W, H) {
+    var xs = [0], ys = [0];
+    items.forEach(function (o) { xs.push(o.x + o.w + k); ys.push(o.y + o.h + k); });
+    xs.sort(function (a, b) { return a - b; }); ys.sort(function (a, b) { return a - b; });
+    for (var yi = 0; yi < ys.length; yi++) for (var xi = 0; xi < xs.length; xi++) {
+      var x = xs[xi], y = ys[yi];
+      if (x + bw > W + 0.01 || y + bh > H + 0.01) continue;
+      var hit = items.some(function (o) { return !(x + bw + k <= o.x + 0.01 || o.x + o.w + k <= x + 0.01 || y + bh + k <= o.y + 0.01 || o.y + o.h + k <= y + 0.01); });
+      if (!hit) return { x: x, y: y };
+    }
+    return null;
+  }
+  function edMoveTo(target) {
+    var g = edG(); if (!g || !ed.sel || !ed.sel.length) return;
+    var sheets = edSheets(g), src = sheets[ed.idx], mv = {}, mem = [], rest = [];
+    ed.sel.forEach(function (n) { mv[n] = 1; });
+    src.forEach(function (o) { (mv[o.n] ? mem : rest).push(o); });
+    var byN = {}; g.bins[ed.idx].items.forEach(function (it) { byN[it.p.n] = it; });
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    mem.forEach(function (o) { var it = byN[o.n]; x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + it.w); y1 = Math.max(y1, o.y + it.h); });
+    var bw = x1 - x0, bh = y1 - y0, tIdx = target === 'new' ? sheets.length : +target;
+    var tItems = tIdx < sheets.length ? g.bins[tIdx].items.map(function (it) { return { x: it.x, y: it.y, w: it.w, h: it.h }; }) : [];
+    var spot = edSpot(tItems, bw, bh, g.k, g.W, g.H), rot = false;
+    if (!spot && mem.length === 1 && byN[mem[0].n].p.rot) { spot = edSpot(tItems, bh, bw, g.k, g.W, g.H); rot = !!spot; }
+    if (!spot) { ed.msg = 'Няма място за този детайл на лист ' + (tIdx + 1) + '.'; edDraw(); return; }
+    var moved = mem.map(function (o) { return { n: o.n, x: spot.x + (o.x - x0), y: spot.y + (o.y - y0), r: rot ? !o.r : o.r }; });
+    if (tIdx >= sheets.length) sheets.push([]);
+    sheets[ed.idx] = rest;
+    moved.forEach(function (o) { sheets[tIdx].push(o); });
+    // ако изходният лист е останал празен, той отпада и индексите се изместват
+    var curSrc = ed.idx;
+    ed.msg = 'Преместено на лист ' + (tIdx + (rest.length || tIdx < curSrc ? 1 : 0)) + (rot ? ' (завъртян)' : '') + '.';
+    ed.sel = null; ed.drag = null;
+    edCommit(sheets);
+  }
+  function edDraw() {
+    var g = edG();
+    if (!g || !g.bins.length) { edClose(); return; }
+    var nb = g.bins.length;
+    if (ed.idx >= nb) ed.idx = nb - 1; if (ed.idx < 0) ed.idx = 0;
+    var real = g.bins[ed.idx], moving = !!(ed.drag && ed.drag.moved), bin = (ed.drag && ed.drag.preview) || real, t = g.trim;
+    real._nocuts = bin._nocuts = moving;
+    var svg = sheetSVG(bin, g), hit = '', isSel = {};
+    (ed.sel || []).forEach(function (n) { isSel[n] = 1; });
+    bin.items.forEach(function (it) {
+      hit += '<rect class="edhit' + (isSel[it.p.n] ? ' sel' : '') + (isSel[it.p.n] && ed.drag && ed.drag.bad ? ' bad' : '') + '" data-n="' + it.p.n + '" x="' + (t + it.x) + '" y="' + (t + it.y) + '" width="' + it.w + '" height="' + it.h + '"><title>' + esc(it.p.name) + ' ' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</title></rect>';
+    });
+    svg = svg.replace('</svg>', hit + '</svg>');
+    $('#edBody').innerHTML = svg;
+    var area = (+g.m.L) * (+g.m.W);
+    $('#edTitle').textContent = g.m.name + ' · лист ' + (ed.idx + 1) + ' от ' + nb;
+    $('#edMeta').textContent = fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм';
+    var info = '<span>Използване ' + fmt(bin.used / area * 100, 1) + '% · рязане ' + fmt((bin.cutLen || 0) / 1000, 1) + ' м</span>';
+    if (lastResult.mode === 'saw') info += bin.noGuil ? '<span class="warn">⚠ Не се реже с трион: детайлите не се делят с прави срезове през целия лист.</span>' : '<span class="okk">✓ Реже се с прави срезове</span>';
+    if (ed.msg) info += '<span class="warn">' + esc(ed.msg) + '</span>';
+    if (ed.sel && ed.sel.length) { var si = bin.items.filter(function (it) { return it.p.n === ed.sel[0]; })[0]; if (si) info += '<span class="hint">Избран: ' + esc(si.p.name) + ' ' + fmt(si.p.L) + '×' + fmt(si.p.W) + (ed.sel.length > 1 ? ' (група)' : '') + '</span>'; }
+    $('#edInfo').innerHTML = info;
+    var to = '<option value="">…</option>';
+    for (var i = 0; i < nb; i++) if (i !== ed.idx) to += '<option value="' + i + '">лист ' + (i + 1) + '</option>';
+    to += '<option value="new">нов лист</option>';
+    $('#edTo').innerHTML = to;
+    $('#edTo').disabled = !(ed.sel && ed.sel.length);
+    $('#edPrev').disabled = ed.idx === 0; $('#edNext').disabled = ed.idx === nb - 1;
+    var rotOk = false; if (ed.sel && ed.sel.length === 1) { var ri = real.items.filter(function (it) { return it.p.n === ed.sel[0]; })[0]; rotOk = !!(ri && ri.p.rot); }
+    $('#edRot').disabled = !rotOk;
+    $('#edUndo').disabled = !ed.undo.length;
+    $('#edAuto').disabled = !g.manual;
+  }
+  (function () {
+    var body = $('#edBody');
+    body.addEventListener('pointerdown', function (e) {
+      var r = e.target.closest ? e.target.closest('.edhit') : null;
+      if (!r) { ed.sel = null; ed.msg = ''; edDraw(); return; }
+      var svg = body.querySelector('svg'), m = svg && svg.getScreenCTM();
+      if (!m) return;
+      ed.sel = edMembers(+r.getAttribute('data-n')); ed.msg = '';
+      ed.drag = { sx: e.clientX, sy: e.clientY, scale: 1 / m.a, moved: false, bad: false, preview: null, res: null };
+      try { body.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault(); edDraw();
+    });
+    body.addEventListener('pointermove', function (e) {
+      var d = ed.drag; if (!d) return;
+      var dx = (e.clientX - d.sx) * d.scale, dy = (e.clientY - d.sy) * d.scale;
+      if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) < 4) return;
+      d.moved = true; d.dx = dx; d.dy = dy;
+      if (d.raf) return;
+      d.raf = requestAnimationFrame(function () {
+        d.raf = 0; if (ed.drag !== d) return;
+        var g = edG(), res = edCalc(d.dx, d.dy, Math.max(8, 12 * d.scale));
+        if (!res) return;
+        d.res = res; d.bad = res.bad;
+        d.preview = edBin(g, res.items);
+        edDraw();
+      });
+    });
+    function end(e) {
+      var d = ed.drag; if (!d) return;
+      if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
+      try { body.releasePointerCapture(e.pointerId); } catch (err) {}
+      var g = edG();
+      if (d.moved && g) {
+        var res = edCalc(d.dx, d.dy, Math.max(8, 12 * d.scale));
+        ed.drag = null;
+        if (res && !res.bad) { if (res.ox || res.oy) { ed.msg = ''; edApply(res); return; } }
+        else if (res) ed.msg = 'Там не може: излиза от листа или опира в друг детайл. Детайлът остана на мястото си.';
+      }
+      ed.drag = null; edDraw();
+    }
+    body.addEventListener('pointerup', end);
+    body.addEventListener('pointercancel', end);
+  })();
+  $('#edPrev').addEventListener('click', function () { ed.idx--; ed.sel = null; ed.msg = ''; edDraw(); });
+  $('#edNext').addEventListener('click', function () { ed.idx++; ed.sel = null; ed.msg = ''; edDraw(); });
+  $('#edRot').addEventListener('click', edRotate);
+  $('#edTo').addEventListener('change', function () { if (this.value !== '') edMoveTo(this.value); });
+  function edUndo() {
+    var g = edG(); if (!g || !ed.undo.length) return;
+    var v = JSON.parse(ed.undo.pop());
+    state.manual = state.manual || {};
+    if (v) state.manual[g.m.id] = v; else delete state.manual[g.m.id];
+    ed.sel = null; ed.msg = ''; save(); edRefresh();
+  }
+  $('#edUndo').addEventListener('click', edUndo);
+  $('#edAuto').addEventListener('click', function () {
+    var g = edG(); if (!g || !g.manual) return;
+    ed.undo.push(JSON.stringify(state.manual[g.m.id] || null));
+    delete state.manual[g.m.id]; ed.sel = null; ed.msg = 'Върната е автоматичната подредба.'; save(); edRefresh();
+  });
+  $('#edDone').addEventListener('click', edClose);
+  document.addEventListener('keydown', function (e) {
+    if ($('#ed').hidden) return;
+    var k = e.key;
+    if (k === 'Escape') { edClose(); return; }
+    if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); edUndo(); return; }
+    if (k === 'r' || k === 'R') { edRotate(); return; }
+    var st = e.shiftKey ? 10 : 1;
+    if (ed.sel && ed.sel.length) {
+      if (k === 'ArrowLeft') { e.preventDefault(); edNudge(-st, 0); }
+      else if (k === 'ArrowRight') { e.preventDefault(); edNudge(st, 0); }
+      else if (k === 'ArrowUp') { e.preventDefault(); edNudge(0, -st); }
+      else if (k === 'ArrowDown') { e.preventDefault(); edNudge(0, st); }
+    } else {
+      var g = edG();
+      if (k === 'ArrowLeft' && ed.idx > 0) { ed.idx--; edDraw(); }
+      else if (k === 'ArrowRight' && g && ed.idx < g.bins.length - 1) { ed.idx++; edDraw(); }
+    }
+  });
+  $('#out').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-ed]');
+    if (b) { var q = b.dataset.ed.split('-'); edOpen(+q[0], +q[1]); return; }
+    var a = e.target.closest('button[data-auto]');
+    if (a && lastResult) {
+      var g = lastResult.res[+a.dataset.auto];
+      if (g && state.manual && state.manual[g.m.id]) { delete state.manual[g.m.id]; save(); render(compute(0)); }
+    }
+  });
+
+
+  /* ---------- Печат / PDF за цеха ---------- */
+  function buildPrint() {
+    if (!lastResult || !lastResult.res.length) return false;
+    var r = lastResult, d = new Date(), date = p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + '.' + d.getFullYear();
+    var title = String(state.name || '').trim() || 'Разкрой', h = '', saved = showCuts;
+    r.res.forEach(function (g) {
+      var nb = g.bins.length, area = (+g.m.L) * (+g.m.W);
+      g.bins.forEach(function (b, bi) {
+        h += '<section class="pp"><div class="pph"><span><b>' + esc(title) + '</b> · ' + date + '</span><span><b>' + esc(g.m.name) + '</b> · лист ' + (bi + 1) + ' от ' + nb + ' · ' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм</span></div>';
+        showCuts = true;
+        try { h += sheetSVG(b, g); } finally { showCuts = saved; }
+        var rows = b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; });
+        h += '<div class="ppt' + (rows.length > 34 ? ' many' : '') + '"><table><thead><tr><th>№</th><th>Детайл</th><th>Размер</th><th>Кант</th></tr></thead><tbody>';
+        rows.forEach(function (it) {
+          var e = it.p.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
+          h += '<tr><td>' + it.p.n + '</td><td>' + esc(it.p.name) + (it.r ? ' ↻' : '') + '</td><td>' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</td><td>' + ed + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + ' · цифрите в кръговете са редът на рязане</div></section>';
+      });
+    });
+    $('#printArea').innerHTML = h;
+    return true;
+  }
+  function doPrint() {
+    if (!buildPrint()) { $('#fileMsg').textContent = 'Още няма разкрой за печат.'; return; }
+    var done = function () { $('#printArea').innerHTML = ''; window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(function () { try { window.print(); } catch (e) { $('#fileMsg').textContent = 'Печатът не е наличен в този изглед.'; } }, 60);
+  }
+
   /* ---------- Файл на разкроя ---------- */
   var prevState = null;
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
   function exportData() {
-    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS, layout: { v: 1, m: layoutPack() } };
+    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS, manual: state.manual || {}, layout: { v: 1, m: layoutPack() } };
   }
   function fileName() {
     var n = String(state.name || 'Разкрой').trim().replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 60) || 'Разкрой', d = new Date();
@@ -2007,8 +2461,13 @@ body { padding-top: 0; padding-inline: 0; }
       var e = Array.isArray(p.e) ? p.e : [0, 0, 0, 0];
       return { name: String(p.name || 'Детайл'), L: +p.L > 0 ? +p.L : '', W: +p.W > 0 ? +p.W : '', q: +p.q > 0 ? Math.floor(+p.q) : 1, mat: byOld[p.mat] || (mats[0] ? mats[0].id : ''), dir: (p.dir === 'rot' || p.dir === 'fix') ? p.dir : (p.rot ? 'rot' : 'auto'), grp: String(p.grp || '').slice(0, 10), row: (+p.row >= 1 && +p.row <= 8) ? String(Math.floor(+p.row)) : '', e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0] };
     });
+    var man = {};
+    if (d.manual && typeof d.manual === 'object') Object.keys(d.manual).forEach(function (ok) {
+      var v = d.manual[ok];
+      if (v && typeof v.h === 'string' && Array.isArray(v.sheets)) man[byOld[ok] || ok] = { h: v.h, sheets: v.sheets.map(function (sh) { return (Array.isArray(sh) ? sh : []).map(function (o) { return { n: +o.n, x: +o.x, y: +o.y, r: !!o.r }; }); }) };
+    });
     var s = d.s || {};
-    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, idMap: byOld };
+    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, idMap: byOld };
   }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
@@ -2184,7 +2643,7 @@ body { padding-top: 0; padding-inline: 0; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '60';
+  var APP_VERSION = '61';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -2217,6 +2676,7 @@ body { padding-top: 0; padding-inline: 0; }
       if (!act) return;
       closeAll();
       if (act === 'astext') { var fp = g('filePanel'); fp.hidden = false; g('textBox').open = true; fp.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (act === 'print') { doPrint(); return; }
       if (act === 'cuts') { var c = g('showCuts'); if (c) c.click(); return; }
       var o = g(act); if (o) o.click();
     });
