@@ -1085,6 +1085,39 @@ body { padding-top: 0; padding-inline: 0; }
   }
   /*CORE_END*/
 
+  /* ---------- Готов разкрой във файла: при отваряне не се смята наново ---------- */
+  var pendingLayout = null, restoredCount = 0;
+  function sigHash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h.toString(36) + '-' + str.length;
+  }
+  // Подреждането на всеки материал се записва заедно с подписа на входните данни; при промяна на детайли/настройки подписът не съвпада и се смята наново.
+  function layoutPack() {
+    var lay = {};
+    activeSolvers.forEach(function (st) {
+      var c = shown(st);
+      if (st.matId && c && c.bins && c.bins.length) lay[st.matId] = { h: sigHash(st.sig), c: serCand(st, c) };
+    });
+    return lay;
+  }
+  function restoreSolver(st, saved) {
+    try {
+      var msg = saved && saved.c; if (!msg || !msg.bins) return false;
+      var cnt = 0, bad = false;
+      msg.bins.forEach(function (b) { b.items.forEach(function (it) {
+        var q = st.parts[it.pi]; cnt++;
+        if (!q || !(((it.w === q.w && it.h === q.h) && !it.r) || ((it.w === q.h && it.h === q.w) && it.r))) bad = true;
+      }); });
+      if (bad || cnt !== st.parts.length) return false;
+      st.polish = !!msg.polish;
+      if (!absorb(st, msg)) return false;
+      st.frozen = true; st.i = 0; st.sentSc = Infinity;
+      restoredCount++;
+      return true;
+    } catch (err) { st.best = null; st.elite = []; st.polBest = null; return false; }
+  }
+
   /* ---------- Изчисление ---------- */
   var lastResult = null, activeSolvers = [];
   var ALGO = { mr: 'свободно подреждане', gl: 'гилотина', st: 'ленти и колони' };
@@ -1281,7 +1314,9 @@ body { padding-top: 0; padding-inline: 0; }
       if (W > 0 && H > 0 && fit.length) {
         var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0]);
         var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big');
-        stepSolver(st, budget);
+        st.matId = m.id;
+        if (pendingLayout && !st.restoredTried) { st.restoredTried = true; var pl = pendingLayout[m.id]; if (pl && pl.h === sigHash(sig) && st.i === 0 && !st.best) restoreSolver(st, pl); }
+        if (!st.frozen) stepSolver(st, budget);
         activeSolvers.push(st);
         var fin = shown(st);
         bins = fin ? expandGroups(reorderBins(fin.bins, k), k, s.mode) : [];
@@ -1659,11 +1694,12 @@ body { padding-top: 0; padding-inline: 0; }
     startWorkers();
     function tick() {
       if (my !== deepToken) return;
-      if (!activeSolvers.length) { prog.textContent = ''; setDeepBusy(false); haltWorkers(); return; }
+      var lv = activeSolvers.filter(function (st) { return !st.frozen; });
+      if (!lv.length) { prog.textContent = ''; setDeepBusy(false); haltWorkers(); return; }
       var el0 = performance.now() - t0, imp = workerImp;
       workerImp = false;
       // След първите секунди се търси само там, където още може да се спести цял лист.
-      var work = el0 < totalMs ? activeSolvers : activeSolvers.filter(nearLB);
+      var work = el0 < totalMs ? lv : lv.filter(nearLB);
       // Първо се търси по-малко листове, в последната част - по-малко рязане и по-събран остатък.
       work.forEach(function (st) {
         var ls = nearLB(st) ? Math.max(totalMs, 40000) : totalMs, was = !!st.polish;
@@ -1671,9 +1707,9 @@ body { padding-top: 0; padding-inline: 0; }
         if (was !== !!st.polish) workers.forEach(function (w) { w.postMessage({ cmd: 'polish', sig: st.sig, on: !!st.polish }); });
       });
       if (work.length !== lastWork) { lastWork = work.length; sendJobs(work); }
-      work.forEach(function (st) { st.improved = false; stepSolver(st, Math.max(100, 100 * activeSolvers.length / work.length)); if (st.improved) imp = true; sendBest(st); });
+      work.forEach(function (st) { st.improved = false; stepSolver(st, Math.max(100, 100 * lv.length / work.length)); if (st.improved) imp = true; sendBest(st); });
       if (imp) render(compute(0));
-      var el = performance.now() - t0, close = activeSolvers.some(nearLB);
+      var el = performance.now() - t0, close = lv.some(nearLB);
       var lim = close ? Math.max(totalMs, 40000) : totalMs;
       prog.textContent = 'Опитани подреждания: ' + fmt(totalTried()) + (workers.length ? ' · ядра: ' + (workers.length + 1) : '') + (el < lim ? (close && el >= totalMs ? ' · опитвам да спестя лист…' : ' · търся по-добро…') : ' · показано е най-доброто');
       if (el < lim) setTimeout(tick, 0); else { setDeepBusy(false); haltWorkers(); }
@@ -1685,7 +1721,9 @@ body { padding-top: 0; padding-inline: 0; }
     save();
     deepToken++;
     render(compute(budget));
-    deepen(effortMs());
+    var liveS = activeSolvers.filter(function (st) { return !st.frozen; });
+    if (!liveS.length && activeSolvers.length) { $('#prog').textContent = 'Разкрой от файла · не е смятан наново'; setDeepBusy(false); }
+    else deepen(effortMs());
   }
 
   function onField(e) {
@@ -1832,7 +1870,7 @@ body { padding-top: 0; padding-inline: 0; }
     showCuts = v; $('#showCuts').checked = v;
     $('#showCuts').addEventListener('change', function () { showCuts = this.checked; try { localStorage.setItem('razkroy-cuts', showCuts ? '1' : '0'); } catch (e) {} if (lastResult) render(lastResult); });
   })();
-  $('#deeper').addEventListener('click', function () { deepen(effortMs()); });
+  $('#deeper').addEventListener('click', function () { activeSolvers.forEach(function (st) { st.frozen = false; }); deepen(effortMs()); });
   $('#stopDeep').addEventListener('click', function () { deepToken++; setDeepBusy(false); haltWorkers(); $('#prog').textContent = 'Спряно · показано е най-доброто до момента (опитани: ' + fmt(totalTried()) + ')'; });
   (function () { var v = 'fast'; try { v = localStorage.getItem('razkroy-effort') || 'fast'; } catch (e) {} $('#effort').value = EFFORT_MS[v] ? v : 'fast';
     $('#effort').addEventListener('change', function () { try { localStorage.setItem('razkroy-effort', this.value); } catch (e) {} deepen(effortMs()); }); })();
@@ -1937,7 +1975,7 @@ body { padding-top: 0; padding-inline: 0; }
   var prevState = null;
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
   function exportData() {
-    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS };
+    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS, layout: { v: 1, m: layoutPack() } };
   }
   function fileName() {
     var n = String(state.name || 'Разкрой').trim().replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 60) || 'Разкрой', d = new Date();
@@ -1960,7 +1998,7 @@ body { padding-top: 0; padding-inline: 0; }
       return { name: String(p.name || 'Детайл'), L: +p.L > 0 ? +p.L : '', W: +p.W > 0 ? +p.W : '', q: +p.q > 0 ? Math.floor(+p.q) : 1, mat: byOld[p.mat] || (mats[0] ? mats[0].id : ''), dir: (p.dir === 'rot' || p.dir === 'fix') ? p.dir : (p.rot ? 'rot' : 'auto'), grp: String(p.grp || '').slice(0, 10), row: (+p.row >= 1 && +p.row <= 8) ? String(Math.floor(+p.row)) : '', e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0] };
     });
     var s = d.s || {};
-    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts };
+    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, idMap: byOld };
   }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
@@ -1972,6 +2010,12 @@ body { padding-top: 0; padding-inline: 0; }
     if (!c) { msg.textContent = 'Това не е разкрой от тази програма или данните са повредени.'; return; }
     prevState = JSON.parse(JSON.stringify(state));
     state = c;
+    pendingLayout = null; restoredCount = 0;
+    if (d.layout && d.layout.v === 1 && d.layout.m) {
+      pendingLayout = {};
+      Object.keys(d.layout.m).forEach(function (ok) { pendingLayout[(c.idMap && c.idMap[ok]) || ok] = d.layout.m[ok]; });
+    }
+    delete c.idMap;
     if (Array.isArray(d.presets)) {
       d.presets.forEach(function (p) {
         if (!Array.isArray(p) || !p[0] || !(+p[1] > 0 && +p[2] > 0)) return;
@@ -1981,7 +2025,8 @@ body { padding-top: 0; padding-inline: 0; }
       savePresets(); fillPresets();
     }
     applyAll();
-    msg.textContent = 'Отворен е разкрой' + (c.name ? ' „' + c.name + '“' : '') + (label ? ' от ' + label : '') + '. Предишните данни са заменени.';
+    var gotLay = restoredCount; pendingLayout = null;
+    msg.textContent = 'Отворен е разкрой' + (c.name ? ' „' + c.name + '“' : '') + (label ? ' от ' + label : '') + '. Предишните данни са заменени.' + (gotLay ? ' Готовото подреждане е взето от файла, не е смятано наново.' : '');
     $('#undoOpen').hidden = false;
   }
   $('#projName').addEventListener('input', function (e) { state.name = e.target.value; save(); });
@@ -2158,9 +2203,15 @@ body { padding-top: 0; padding-inline: 0; }
   });
   $('#restorePrev').addEventListener('click', function () {
     var d = loadPrev(); if (!d) return;
-    prevState = JSON.parse(JSON.stringify(state)); state = d; applyAll();
+    prevState = JSON.parse(JSON.stringify(state)); state = d;
+    pendingLayout = null; restoredCount = 0;
+    try { var sl = JSON.parse(localStorage.getItem('razkroy-lay-v1') || 'null'); if (sl && sl.v === 1) pendingLayout = sl.m; } catch (e) {}
+    applyAll(); pendingLayout = null;
     $('#undoOpen').hidden = false; $('#restorePrev').hidden = true; $('#fileMsg').textContent = 'Върната е последната работа.';
   });
+  function storeLayout() { try { localStorage.setItem('razkroy-lay-v1', JSON.stringify({ v: 1, m: layoutPack() })); } catch (e) { try { localStorage.removeItem('razkroy-lay-v1'); } catch (e2) {} } }
+  window.addEventListener('pagehide', storeLayout);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') storeLayout(); });
   $('#restorePrev').hidden = !(loadPrev() && state.parts.length === 0 && loadPrev().parts.length);
 
   $('#projName').value = state.name || '';
