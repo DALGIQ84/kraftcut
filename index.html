@@ -146,7 +146,19 @@ table { border-collapse: collapse; width: 100%; }
 th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); padding: 0 6px 6px; white-space: nowrap; }
 td { padding: 3px 4px; vertical-align: middle; }
 tbody tr { border-top: 1px solid var(--line); }
-#partsTable { min-width: 820px; }
+#partsTable { min-width: 0; }
+#partsTable td { padding: 3px 2px; }
+#partsTable th { padding: 0 3px 6px; }
+#partsTable td input[type="text"] { min-width: 100px; width: 100%; }
+#partsTable td .num { width: 68px; }
+#partsTable td .qty { width: 52px; }
+#partsTable td select { min-width: 0; width: 100%; padding-left: 6px; padding-right: 22px; text-overflow: ellipsis; }
+#partsTable select[data-f="mat"] { min-width: 104px; }
+#partsTable select[data-f="dir"] { min-width: 128px; }
+#partsTable select[data-f="grp"] { min-width: 58px; }
+#partsTable select[data-f="row"] { min-width: 72px; }
+#partsTable td.c { width: 30px; }
+#partsTable button.ghost { padding: 0 4px; }
 #matTable { min-width: 760px; }
 td.c, th.c { text-align: center; }
 td input[type="text"] { min-width: 120px; }
@@ -2032,6 +2044,11 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       schedule();
     });
   });
+  // Enter върху отметка за кант = сложи/махни отметката (като интервала), за да се въвежда само от клавиатурата.
+  $('#partBody').addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (e.key === 'Enter' && t && t.type === 'checkbox') { e.preventDefault(); t.click(); }
+  });
   function focusMat(i) { var el = document.getElementById('mn' + i); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); el.select(); } }
   $('#addMat').addEventListener('click', function () {
     state.materials.push({ id: nid(), name: 'Нов материал', L: 2800, W: 2070, price: '' });
@@ -3016,7 +3033,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '71';
+  var APP_VERSION = '72';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
