@@ -244,6 +244,7 @@ body { padding-top: 0; padding-inline: 0; }
 .tb-msg:empty { display: none; }
 .tb-file { font-size: 12.5px; font-weight: 600; color: var(--accent-text); flex: none; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-file:empty { display: none; }
+.tb-dirty { font-size: 12.5px; font-weight: 600; color: var(--warn); white-space: nowrap; flex: none; }
 @media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .mbtn.nav { display: none; } .tb-in { gap: 8px; } }
 .panel { scroll-margin-top: 72px; }
 .tb-in { position: relative; }
@@ -356,6 +357,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       <button type="button" class="mbtn help" id="helpBtn" aria-label="Помощ">?</button>
     </div>
     <div class="tb-proj">
+      <span id="tbDirty" class="tb-dirty" hidden title="Има промени, които не са записани във файл">● незапазено</span>
       <span id="tbFile" class="tb-file"></span>
       <input id="projName" type="text" placeholder="Име на разкроя" aria-label="Име на разкроя" hidden>
       <span id="fileMsg" class="tb-msg" aria-live="polite"></span>
@@ -451,6 +453,13 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     </div>
     <div id="out"></div>
   </section>
+</div>
+
+<div id="dirtyOv" class="startov" role="dialog" aria-modal="true" aria-labelledby="dirtyT" hidden>
+  <div class="startbox"><h2 id="dirtyT">Има незапазени промени</h2>
+    <p class="hint" style="font-size:14px;line-height:1.55;margin:0">Ако продължиш, текущата работа ще бъде заменена и промените ще се изгубят.</p>
+    <div class="row-actions"><button id="dirtySave" type="button" class="primary">Запази</button><button id="dirtyNo" type="button">Не запазвай</button><button id="dirtyCancel" type="button" class="ghost keep">Отказ</button></div>
+  </div>
 </div>
 
 <div id="helpOv" class="startov" role="dialog" aria-modal="true" aria-labelledby="helpT" hidden>
@@ -2435,6 +2444,39 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     setTimeout(function () { try { window.print(); } catch (e) { $('#fileMsg').textContent = 'Печатът не е наличен в този изглед.'; } }, 60);
   }
 
+
+  /* ---------- Незапазени промени ---------- */
+  var cleanSig = '';
+  function coreSig() { return JSON.stringify([state.name || '', state.s, state.materials, state.parts, state.manual || {}]); }
+  function markClean() { cleanSig = coreSig(); updateDirtyTag(); }
+  function isDirty() { return !!(state.parts && state.parts.length) && coreSig() !== cleanSig; }
+  function updateDirtyTag() { var t = document.getElementById('tbDirty'); if (t) t.hidden = !isDirty(); }
+  setInterval(updateDirtyTag, 800);
+  window.addEventListener('beforeunload', function (e) { if (isDirty()) { e.preventDefault(); e.returnValue = ''; return ''; } });
+  // Въпрос преди да се замени текущата работа (нов разкрой, отваряне на друг файл).
+  function askDiscard(go) {
+    if (!isDirty()) { go(); return; }
+    var ov = document.getElementById('dirtyOv'); if (!ov) { go(); return; }
+    ov.hidden = false;
+    function close() { ov.hidden = true; ov.querySelector('#dirtySave').onclick = ov.querySelector('#dirtyNo').onclick = ov.querySelector('#dirtyCancel').onclick = null; }
+    ov.querySelector('#dirtyCancel').onclick = close;
+    ov.querySelector('#dirtyNo').onclick = function () { close(); go(); };
+    ov.querySelector('#dirtySave').onclick = async function () {
+      close();
+      try { await doSave(false); } catch (err) {}
+      if (!isDirty()) go();
+    };
+    try { ov.querySelector('#dirtySave').focus(); } catch (err) {}
+  }
+  ['newProj', 'openFile', 'restorePrev'].forEach(function (id) {
+    var el = document.getElementById(id); if (!el) return;
+    document.addEventListener('click', function (e) {
+      if (e.target !== el || el._go || !isDirty()) return;
+      e.stopImmediatePropagation(); e.preventDefault();
+      askDiscard(function () { el._go = true; try { el.click(); } finally { el._go = false; } });
+    }, true);
+  });
+
   /* ---------- Файл на разкроя ---------- */
   var prevState = null;
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -2494,7 +2536,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       savePresets(); fillPresets();
     }
     applyAll();
-    var gotLay = restoredCount; pendingLayout = null;
+    var gotLay = restoredCount; pendingLayout = null; markClean();
     msg.textContent = 'Отворен е разкрой' + (c.name ? ' „' + c.name + '“' : '') + (label ? ' от ' + label : '') + '. Предишните данни са заменени.' + (gotLay ? ' Готовото подреждане е взето от файла, не е смятано наново.' : '');
     $('#undoOpen').hidden = false;
   }
@@ -2522,7 +2564,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       var hn = fileHandle.name;
       try {
         if (!(await ensureWrite(fileHandle))) { msg.textContent = 'Няма разрешение за запис във „' + hn + '“. Натисни „Запази“ пак и избери „Разреши“.'; return true; }
-        await writeHandle(fileHandle, txt); msg.textContent = 'Записано в „' + hn + '“ (същият файл).'; return true;
+        await writeHandle(fileHandle, txt); markClean(); msg.textContent = 'Записано в „' + hn + '“ (същият файл).'; return true;
       } catch (err) {
         if (err && err.name === 'NotFoundError') { fileHandle = null; showFileTag(); msg.textContent = 'Файлът „' + hn + '“ не е намерен (преместен или изтрит). Избери къде да се запише.'; }
         else if (err && (err.name === 'SecurityError' || err.name === 'TypeError')) { fileHandle = null; showFileTag(); }
@@ -2532,7 +2574,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     try {
       var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'] } }] });
       await writeHandle(h, txt); fileHandle = h; appPath = null; showFileTag(); $('#saveAs').hidden = false;
-      msg.textContent = 'Записано в „' + h.name + '“. Следващото „Запази“ обновява същия файл.';
+      markClean(); msg.textContent = 'Записано в „' + h.name + '“. Следващото „Запази“ обновява същия файл.';
       return true;
     } catch (err) {
       if (err && err.name === 'AbortError') { msg.textContent = 'Записът е отказан.'; return true; }
@@ -2545,7 +2587,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     try { dl = (window.claude && window.claude.use) ? await window.claude.use('downloads') : null; } catch (err) { dl = null; }
     if (!dl) { showText(txt); msg.textContent = 'Записът във файл не е наличен в този изглед. Данните са показани като текст по-долу, копирай ги.'; return; }
     try {
-      await dl.save({ filename: fileName(), data: txt });
+      await dl.save({ filename: fileName(), data: txt }); markClean();
       msg.textContent = 'Файлът „' + fileName() + '“ е запазен чрез браузъра. Ако не си избрал папка, намери го в „Изтеглени“. За да избираш папка всеки път, включи в браузъра „Питай къде да се запази всеки файл“.';
     } catch (err) {
       if (err && err.code === 'declined') { msg.textContent = 'Записът е отказан.'; return; }
@@ -2558,7 +2600,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     if (r.canceled) { msg.textContent = 'Записът е отказан.'; return; }
     if (r.error) { msg.textContent = 'Файлът не се запази: ' + r.error; return; }
     appPath = r.path; fileHandle = null; showFileTag(); $('#saveAs').hidden = false;
-    msg.textContent = 'Записано в „' + r.path + '“. Следващото „Запази“ обновява същия файл.';
+    markClean(); msg.textContent = 'Записано в „' + r.path + '“. Следващото „Запази“ обновява същия файл.';
   }
   async function doSave(forcePick) {
     var txt = JSON.stringify(exportData(), null, 1);
@@ -2643,7 +2685,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '61';
+  var APP_VERSION = '62';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -2689,12 +2731,12 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   $('#loadText').addEventListener('click', function () { loadText($('#fileText').value, ''); });
   $('#undoOpen').addEventListener('click', function () {
     if (!prevState) return;
-    state = prevState; prevState = null; applyAll();
+    state = prevState; prevState = null; applyAll(); cleanSig = null; updateDirtyTag();
     $('#undoOpen').hidden = true; $('#fileMsg').textContent = 'Върнати са предишните данни.';
   });
 
   $('#newProj').addEventListener('click', function () {
-    prevState = JSON.parse(JSON.stringify(state)); state = defaults(); fileHandle = null; appPath = null; showFileTag(); applyAll();
+    prevState = JSON.parse(JSON.stringify(state)); state = defaults(); fileHandle = null; appPath = null; showFileTag(); applyAll(); markClean();
     $('#undoOpen').hidden = false; $('#fileMsg').textContent = 'Полетата са изчистени.';
   });
   $('#restorePrev').addEventListener('click', function () {
@@ -2703,7 +2745,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     fileHandle = null; appPath = null; showFileTag();
     pendingLayout = null; restoredCount = 0;
     try { var sl = JSON.parse(localStorage.getItem('razkroy-lay-v1') || 'null'); if (sl && sl.v === 1) pendingLayout = sl.m; } catch (e) {}
-    applyAll(); pendingLayout = null;
+    applyAll(); pendingLayout = null; cleanSig = null; updateDirtyTag();
     $('#undoOpen').hidden = false; $('#restorePrev').hidden = true; $('#fileMsg').textContent = 'Върната е последната работа.';
   });
   function storeLayout() { try { localStorage.setItem('razkroy-lay-v1', JSON.stringify({ v: 1, m: layoutPack() })); } catch (e) { try { localStorage.removeItem('razkroy-lay-v1'); } catch (e2) {} } }
