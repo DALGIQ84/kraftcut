@@ -1,0 +1,12 @@
+KRAFTCUT — как да го качиш в GitHub и да го инсталираш (като KRAFTPLAN)
+
+1. В GitHub (акаунт DALGIQ84) създай ново хранилище: име  kraftcut , Public.
+2. Add file -> Upload files. Качи ВСИЧКИ файлове от тази папка (не папката, а файловете):
+   index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png, icon-maskable-512.png, favicon.png
+   После Commit changes.
+3. Settings -> Pages -> Build and deployment -> Source: Deploy from a branch -> Branch: main, папка / (root) -> Save.
+4. След 1-2 минути адресът е:  https://dalgiq84.github.io/kraftcut/
+5. Отвори го в Chrome или Edge. В адресната лента (вдясно) се появява иконка за инсталиране -> Инсталирай.
+   След това се пуска като програма и работи и без интернет.
+
+Обновяване на програмата: качваш нов index.html (и ако е променен — sw.js с по-ново число във "kraftcut-v1"), затваряш и отваряш програмата.
