@@ -237,6 +237,15 @@ body { padding-top: 0; padding-inline: 0; }
 .stab-info { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted); padding-right: 6px; }
 body { padding-bottom: 46px; }
 @media print { .sheettabs { display: none !important; } body { padding-bottom: 0; } }
+/* На широк екран табовете са отстрани (лява лента), на тесен - долу. */
+@media (min-width: 761px) {
+  body { padding-bottom: 0; }
+  .sheettabs { top: var(--tbh, 62px); right: auto; bottom: 0; width: 116px; height: auto; flex-direction: column; align-items: stretch; gap: 4px; padding: 14px 0 0; border-top: 0; border-right: 1px solid var(--line); }
+  .stab { height: 46px; text-align: left; padding: 0 12px 0 16px; border: 0; border-radius: 8px 0 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-left: 8px; }
+  .stab.on { box-shadow: inset 4px 0 0 var(--accent); border: 1px solid var(--line); border-right-color: var(--surface); margin-right: -1px; }
+  .stab-info { display: none; }
+  .wrap { margin-left: max(116px, calc((100% - 1120px) / 2)); margin-right: auto; }
+}
 .navbusy { color: var(--accent-text); font-size: 11px; animation: nb 1s infinite; }
 @keyframes nb { 50% { opacity: .25; } }
 [data-page][hidden] { display: none !important; }
@@ -2814,6 +2823,12 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     if (!noScroll) window.scrollTo(0, 0);
   }
   showPage(curPage, true);
+  (function () {
+    var tb = document.getElementById('topbar');
+    function setH() { if (tb) document.documentElement.style.setProperty('--tbh', tb.offsetHeight + 'px'); }
+    setH(); window.addEventListener('resize', setH);
+    if (window.ResizeObserver && tb) new ResizeObserver(setH).observe(tb);
+  })();
   $('#sheetTabs').addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('.stab') : null; if (b) showPage(b.getAttribute('data-go')); });
   function loadText(text, label) {
     var msg = $('#fileMsg'), d = null;
@@ -2986,7 +3001,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '69';
+  var APP_VERSION = '70';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
