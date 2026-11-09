@@ -217,7 +217,7 @@ details.list td, details.list th { padding: 4px 8px; }
 body { padding-top: 0; padding-inline: 0; }
 .wrap { padding: 22px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
 .topbar { position: sticky; top: 0; z-index: 50; background: var(--surface); border-bottom: 2px solid var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,.12); }
-.tb-in { max-width: 1120px; margin: 0 auto; padding: 6px max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tb-in { max-width: none; margin: 0; padding: 6px max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .tb-logo { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; display: inline-flex; flex: none; }
 .tb-logo img { display: block; height: 34px; width: auto; }
 .tb-name { font-family: var(--font-display); font-weight: 600; letter-spacing: .06em; font-size: 20px; line-height: 1; white-space: nowrap; }
@@ -238,13 +238,13 @@ body { padding-top: 0; padding-inline: 0; }
 .mpop button.on::after { content: " ✓"; color: var(--accent-text); }
 .mpop hr { border: 0; border-top: 1px solid var(--line); margin: 5px 2px; width: calc(100% - 4px); }
 .mlabel { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 4px 10px 2px; }
-.tb-proj { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 220px; justify-content: flex-end; }
-.tb-proj input { max-width: 240px; min-width: 150px; height: 32px; }
-.tb-msg { font-size: 12.5px; color: var(--muted); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-proj { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 360px; justify-content: flex-end; }
+.tb-proj input { width: 190px; flex: none; height: 32px; }
+.tb-msg { position: absolute; right: 16px; top: calc(100% + 8px); z-index: 55; max-width: min(560px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 7px 12px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
 .tb-msg:empty { display: none; }
-.tb-file { font-size: 12.5px; font-weight: 600; color: var(--accent-text); max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-file { font-size: 12.5px; font-weight: 600; color: var(--accent-text); flex: none; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-file:empty { display: none; }
-@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .tb-msg { white-space: normal; max-width: none; flex: 1 1 100%; } .mbtn.nav { display: none; } .tb-in { gap: 8px; } }
+@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .mbtn.nav { display: none; } .tb-in { gap: 8px; } }
 .panel { scroll-margin-top: 72px; }
 .tb-in { position: relative; }
 .menu.static { position: static; }
@@ -2184,7 +2184,11 @@ body { padding-top: 0; padding-inline: 0; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '58';
+  var APP_VERSION = '59';
+  (function () {
+    var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
+    new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
+  })();
   (function () { var v = document.getElementById('tbVer'); if (v) v.textContent = 'v' + APP_VERSION; try { document.title = 'KRAFTCUT v' + APP_VERSION; } catch (e) {} })();
   (function () {
     var bar = document.getElementById('topbar'); if (!bar) return;
