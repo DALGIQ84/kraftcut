@@ -1242,6 +1242,12 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   var lastResult = null, activeSolvers = [];
   var ALGO = { mr: 'свободно подреждане', gl: 'гилотина', st: 'ленти и колони' };
   // Ред на рязане: дърво от пълни срезове (както реже трион). Връща номерирани срезове по лентите, ниво по ниво.
+  // Завъртания: колко пъти се сменя посоката на срезовете по реда на рязане (толкова пъти се обръща листът/лентата).
+  function turnsOf(bin) {
+    var c = cutPlan(bin), t = 0;
+    for (var i = 1; i < c.length; i++) if (c[i].v !== c[i - 1].v) t++;
+    return t;
+  }
   function cutPlan(bin) {
     var k = bin.k, cuts = [];
     function bbox(it) {
@@ -1261,31 +1267,40 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     }
     function vcut(x, r) { cuts.push({ v: true, x: x, a: r.y0, b: r.y1, n: cuts.length + 1 }); }
     function hcut(y, r) { cuts.push({ v: false, y: y, a: r.x0, b: r.x1, n: cuts.length + 1 }); }
-    // Редът върви като четене: най-горната лента първо (отляво надясно), после следващата надолу.
+    // Редът на срезовете е такъв, че листът (лентата) да се обръща възможно най-малко: първо всички срезове в една посока
+    // (обрезките и разделянето на ленти), после се минава към всяка лента поотделно. Подредбата на детайлите не се променя.
     function walk(it, r0, last, depth) {
-      var r = { x0: r0.x0, y0: r0.y0, x1: r0.x1, y1: r0.y1 }, bb = bbox(it);
-      if (bb.y0 - r.y0 > 1) { hcut(bb.y0 - k / 2, r); r.y0 = bb.y0; }
-      if (bb.x0 - r.x0 > 1) { vcut(bb.x0 - k / 2, r); r.x0 = bb.x0; }
-      if (r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
-      if (r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
-      if (it.length < 2 || depth > 12) return;
-      var gx = groupsOn(it, 'x'), gy = groupsOn(it, 'y'), ax;
-      if (depth === 1) ax = gy.length >= 2 ? 'y' : 'x';
-      else if (last === 'y') ax = gx.length >= 2 ? 'x' : 'y';
-      else ax = gy.length >= 2 ? 'y' : 'x';
-      var gs = ax === 'x' ? gx : gy;
-      if (gs.length < 2) { ax = ax === 'x' ? 'y' : 'x'; gs = ax === 'x' ? gx : gy; }
-      if (gs.length < 2) return;
-      var bbs = gs.map(bbox);
-      for (var i = 0; i < gs.length; i++) {
-        var lo = ax === 'x' ? bbs[i].x0 : bbs[i].y0, hi = ax === 'x' ? bbs[i].x1 : bbs[i].y1, nlo = 0;
-        if (i < gs.length - 1) {
-          nlo = ax === 'x' ? bbs[i + 1].x0 : bbs[i + 1].y0;
-          if (ax === 'x') vcut(hi + k / 2, r); else hcut(hi + k / 2, r);
-        }
-        var cr = ax === 'x' ? { x0: lo, x1: hi, y0: r.y0, y1: r.y1 } : { x0: r.x0, x1: r.x1, y0: lo, y1: hi };
-        walk(gs[i], cr, ax, depth + 1);
-        if (i < gs.length - 1 && nlo - hi > k + 1) { if (ax === 'x') vcut(nlo - k / 2, r); else hcut(nlo - k / 2, r); }
+      var r = { x0: r0.x0, y0: r0.y0, x1: r0.x1, y1: r0.y1 }, bb = bbox(it), gs = null, ax = null;
+      if (it.length >= 2 && depth <= 12) {
+        var gx = groupsOn(it, 'x'), gy = groupsOn(it, 'y');
+        if (depth === 1) ax = gy.length >= 2 ? 'y' : 'x';
+        else if (last === 'y') ax = gx.length >= 2 ? 'x' : 'y';
+        else ax = gy.length >= 2 ? 'y' : 'x';
+        gs = ax === 'x' ? gx : gy;
+        if (gs.length < 2) { ax = ax === 'x' ? 'y' : 'x'; gs = ax === 'x' ? gx : gy; }
+        if (gs.length < 2) { gs = null; ax = null; }
+      }
+      // Първо обрезките в посоката, която не е на разделянето (при единичен детайл - в посоката на предишния срез).
+      var vFirst = ax ? ax !== 'x' : (last ? last === 'x' : true);
+      function trimsV() {
+        if (bb.x0 - r.x0 > 1) { vcut(bb.x0 - k / 2, r); r.x0 = bb.x0; }
+        if (r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
+      }
+      function trimsH() {
+        if (bb.y0 - r.y0 > 1) { hcut(bb.y0 - k / 2, r); r.y0 = bb.y0; }
+        if (r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
+      }
+      if (vFirst) { trimsV(); trimsH(); } else { trimsH(); trimsV(); }
+      if (!gs) return;
+      var bbs = gs.map(bbox), i;
+      for (i = 0; i < gs.length - 1; i++) {
+        var hi = ax === 'x' ? bbs[i].x1 : bbs[i].y1, nlo = ax === 'x' ? bbs[i + 1].x0 : bbs[i + 1].y0;
+        if (ax === 'x') vcut(hi + k / 2, r); else hcut(hi + k / 2, r);
+        if (nlo - hi > k + 1) { if (ax === 'x') vcut(nlo - k / 2, r); else hcut(nlo - k / 2, r); }
+      }
+      for (i = 0; i < gs.length; i++) {
+        var lo = ax === 'x' ? bbs[i].x0 : bbs[i].y0, hh = ax === 'x' ? bbs[i].x1 : bbs[i].y1;
+        walk(gs[i], ax === 'x' ? { x0: lo, x1: hh, y0: r.y0, y1: r.y1 } : { x0: r.x0, x1: r.x1, y0: lo, y1: hh }, ax, depth + 1);
       }
     }
     walk(bin.items.slice(), { x0: 0, y0: 0, x1: bin.W, y1: bin.H }, null, 1);
@@ -1762,7 +1777,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       g.bins.forEach(function (b, bi) {
         var oc = offcut(b), area = (+g.m.L) * (+g.m.W);
         h += '<article class="sheet"><div class="sheet-top"><span class="t">Лист ' + (bi + 1) + ' от ' + g.bins.length + '</span><button type="button" class="fsbtn" data-fs="' + gi + '-' + bi + '">На цял екран</button>' + (g.sigH ? '<button type="button" class="fsbtn" data-ed="' + gi + '-' + bi + '">Редактирай</button>' : '');
-        h += '<span class="m mono">използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м' + (oc ? ' · остатък ≈ ' + fmt(oc.w) + '×' + fmt(oc.h) : '') + (b.noGuil ? ' · <b class="noguil">⚠ не се реже с трион</b>' : '') + '</span></div>';
+        h += '<span class="m mono">използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м' + (oc ? ' · остатък ≈ ' + fmt(oc.w) + '×' + fmt(oc.h) : '') + (r.mode === 'saw' && !b.noGuil ? ' · <span class="tn" title="Колко пъти се сменя посоката на срезовете по реда на рязане, т.е. колко пъти се обръща листът или лентата">завъртания ' + turnsOf(b) + '</span>' : '') + (b.noGuil ? ' · <b class="noguil">⚠ не се реже с трион</b>' : '') + '</span></div>';
         h += sheetSVG(b, g);
         h += '<details class="list"><summary>Опис на детайлите (' + b.items.length + ')</summary><div class="tablebox"><table><thead><tr><th>№</th><th>Име</th><th>Дължина</th><th>Ширина</th><th>Позиция</th><th>Кант</th></tr></thead><tbody>';
         b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; }).forEach(function (it) {
@@ -2529,7 +2544,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var area = (+g.m.L) * (+g.m.W);
     $('#edTitle').textContent = g.m.name + ' · лист ' + (ed.idx + 1) + ' от ' + nb;
     $('#edMeta').textContent = fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм';
-    var info = '<span>Използване ' + fmt(bin.used / area * 100, 1) + '% · рязане ' + fmt((bin.cutLen || 0) / 1000, 1) + ' м</span>';
+    var info = '<span>Използване ' + fmt(bin.used / area * 100, 1) + '% · рязане ' + fmt((bin.cutLen || 0) / 1000, 1) + ' м' + (lastResult.mode === 'saw' && !bin.noGuil ? ' · завъртания ' + turnsOf(bin) : '') + '</span>';
     if (lastResult.mode === 'saw') info += bin.noGuil ? '<span class="warn">⚠ Не се реже с трион: детайлите не се делят с прави срезове през целия лист.</span>' : '<span class="okk">✓ Реже се с прави срезове</span>';
     if (ed.msg) info += '<span class="warn">' + esc(ed.msg) + '</span>';
     if (ed.sel && ed.sel.length) { var si = bin.items.filter(function (it) { return it.p.n === ed.sel[0]; })[0]; if (si) info += '<span class="hint">Избран: ' + esc(si.p.name) + ' ' + fmt(si.p.L) + '×' + fmt(si.p.W) + (ed.sel.length > 1 ? ' (група)' : '') + '</span>'; }
@@ -2701,7 +2716,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
           h += '<tr><td>' + it.p.n + '</td><td>' + esc(it.p.name) + (it.r ? ' ↻' : '') + '</td><td>' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</td><td>' + ed + '</td></tr>';
         });
         h += '</tbody></table></div>';
-        h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + (showCuts ? ' · цифрите в кръговете са редът на рязане' : '') + '</div></section>';
+        h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (r.mode === 'saw' && !b.noGuil ? ' · завъртания на листа ' + turnsOf(b) : '') + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + (showCuts ? ' · цифрите в кръговете са редът на рязане' : '') + '</div></section>';
       });
       var op = offPieces(g);
       if (op.length) {
@@ -3001,7 +3016,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '70';
+  var APP_VERSION = '71';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
