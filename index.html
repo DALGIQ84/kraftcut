@@ -320,7 +320,7 @@ body { padding-top: 0; padding-inline: 0; }
     </div>
     <div class="tb-proj">
       <span id="tbFile" class="tb-file"></span>
-      <input id="projName" type="text" placeholder="Име на разкроя" aria-label="Име на разкроя">
+      <input id="projName" type="text" placeholder="Име на разкроя" aria-label="Име на разкроя" hidden>
       <span id="fileMsg" class="tb-msg" aria-live="polite"></span>
     </div>
   </div>
@@ -2184,7 +2184,7 @@ body { padding-top: 0; padding-inline: 0; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '59';
+  var APP_VERSION = '60';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
