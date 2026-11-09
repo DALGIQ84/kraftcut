@@ -272,6 +272,13 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 .ed-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 8px; font-size: 13px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ed-chip:hover { border-color: var(--accent); }
 .ed-chip small { display: block; color: var(--muted); font-size: 12px; }
+.tip { position: fixed; z-index: 95; pointer-events: none; background: #1C1F22; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 13px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 260px; }
+.tip b { font-size: 14px; }
+.tip .tsz { font-family: var(--font-mono); font-size: 14px; color: #F2B11F; }
+.tip small { color: #cfd6db; }
+.zoombtns { display: inline-flex; gap: 4px; }
+.zoombtns button { min-width: 36px; padding: 0 8px; }
+.ed-body, .fs-body { touch-action: none; }
 .ed-ghost { position: fixed; z-index: 90; pointer-events: none; opacity: .9; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
 @media (max-width: 760px) { .ed-main { flex-direction: column; } .ed-tray { width: auto; max-height: 28%; flex-direction: row; flex-wrap: wrap; } }
 @media print { .ed { display: none !important; } }
@@ -489,11 +496,13 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 </div>
 
 <div id="printArea" aria-hidden="true"></div>
+<div id="tip" class="tip" hidden></div>
 
 <div id="ed" class="fs ed" role="dialog" aria-modal="true" aria-label="Редактор на листа" hidden>
   <div class="fs-bar">
     <div class="fs-title"><span id="edTitle"></span><span id="edMeta" class="mono hint" style="text-transform:none;letter-spacing:0;font-weight:400;font-size:13px"></span></div>
     <div class="row-actions">
+      <span class="zoombtns"><button id="edZout" type="button" title="Намали">−</button><button id="edZin" type="button" title="Увеличи (колелце на мишката)">＋</button><button id="edZfit" type="button" title="Целият лист">⤢</button></span>
       <button id="edPrev" type="button">‹</button>
       <button id="edNext" type="button">›</button>
       <button id="edRot" type="button" title="Завърти избрания детайл (R)">Завърти</button>
@@ -509,13 +518,14 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     <div id="edBody" class="fs-body ed-body"></div>
     <aside id="edTray" class="ed-tray" aria-label="Детайли извън листа"><div class="ed-tray-h">Извън листа</div><div id="edTrayList" style="display:contents"></div></aside>
   </div>
-  <div class="hint ed-help">Хвани детайл и го премести. Може да го пуснеш в полето „Извън листа“ вдясно (или бутон „Извади от листа“), а после да го върнеш — кликни го там или го дръпни върху листа. Залепва за ръбовете на другите детайли и за листа. Стрелките го движат на 1 мм (Shift = 10 мм), R го завърта, Ctrl+Z връща.</div>
+  <div class="hint ed-help">Хвани детайл и го премести. Колелцето на мишката увеличава; за придвижване влачи с десния бутон (или Shift + влачене). Може да го пуснеш в полето „Извън листа“ вдясно (или бутон „Извади от листа“), а после да го върнеш — кликни го там или го дръпни върху листа. Залепва за ръбовете на другите детайли и за листа. Стрелките го движат на 1 мм (Shift = 10 мм), R го завърта, Ctrl+Z връща.</div>
 </div>
 
 <div id="fs" class="fs" role="dialog" aria-modal="true" aria-label="Схема на рязане на цял екран" hidden>
   <div class="fs-bar">
     <div class="fs-title"><span id="fsTitle"></span><span id="fsMeta" class="mono hint" style="text-transform:none;letter-spacing:0;font-weight:400;font-size:13px"></span></div>
     <div class="row-actions">
+      <span class="zoombtns"><button id="fsZout" type="button" title="Намали">−</button><button id="fsZin" type="button" title="Увеличи (колелце на мишката)">＋</button><button id="fsZfit" type="button" title="Целият лист">⤢</button></span>
       <button id="fsPrev" type="button">‹ Предишен</button>
       <span id="fsPos" class="mono hint"></span>
       <button id="fsNext" type="button">Следващ ›</button>
@@ -1583,6 +1593,11 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     o += '<text class="td" transform="translate(' + (x + pad + fd * 0.82).toFixed(1) + ' ' + (y + h / 2).toFixed(1) + ') rotate(-90)" font-size="' + fd.toFixed(1) + '">' + vv + '</text>';
     return o;
   }
+  // Текст за балончето при посочване на детайл: № | име | размер | кант | завъртян
+  function tipText(it) {
+    var e = it.p.e || [0, 0, 0, 0], ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
+    return [it.p.n, String(it.p.name || 'Детайл'), fmt(it.p.L) + '×' + fmt(it.p.W) + ' мм', ed || 'без кант', it.r ? 'завъртян' : ''].join('|');
+  }
   function pieceLabel(it, x, y, ip) {
     var side = sideLabels(it, x, y, ip);
     if (side) return side;
@@ -1666,7 +1681,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     o += '<rect class="trimline" x="' + t + '" y="' + t + '" width="' + (ML - (g.tn || 2) * t) + '" height="' + (MW - (g.tn || 2) * t) + '"/>';
     bin.items.forEach(function (it) {
       var x = t + it.x, y = t + it.y;
-      o += '<g style="--h:' + it.p.hue + '"><rect class="piece" x="' + x + '" y="' + y + '" width="' + it.w + '" height="' + it.h + '"/>';
+      o += '<g data-tip="' + esc(tipText(it)) + '" style="--h:' + it.p.hue + '"><rect class="piece" x="' + x + '" y="' + y + '" width="' + it.w + '" height="' + it.h + '"/>';
       var ip = Math.max(3, Math.min(ins, Math.min(it.w, it.h) * 0.12));
       o += edgeLines(it, x, y, ip) + pieceLabel(it, x, y, ip) + '</g>';
     });
@@ -2146,6 +2161,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var it = fsList[fsIdx], area = (+it.g.m.L) * (+it.g.m.W);
     $('#fsTitle').textContent = it.g.m.name + ' · лист ' + (it.j + 1) + ' от ' + it.g.bins.length;
     $('#fsMeta').textContent = fmt(it.g.m.L) + '×' + fmt(it.g.m.W) + ' мм · използване ' + fmt(it.b.used / area * 100, 1) + '%';
+    zoomSt.fs = null;
     $('#fsBody').innerHTML = sheetSVG(it.b, it.g);
     $('#fsPos').textContent = (fsIdx + 1) + ' / ' + fsList.length;
     $('#fsPrev').disabled = fsIdx === 0; $('#fsNext').disabled = fsIdx === fsList.length - 1;
@@ -2187,6 +2203,74 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   document.addEventListener('fullscreenchange', function () { if (fsReal && !document.fullscreenElement) fsClose(); });
 
 
+  /* ---------- Увеличение и балонче при посочване ---------- */
+  var zoomSt = { fs: null, ed: null };
+  function baseVB(svg) {
+    var a = (svg.getAttribute('data-vb') || svg.getAttribute('viewBox')).split(/[ ,]+/).map(Number);
+    svg.setAttribute('data-vb', a.join(' '));
+    return { x: a[0], y: a[1], w: a[2], h: a[3] };
+  }
+  function applyZoom(host, key) {
+    var svg = host.querySelector('svg'); if (!svg) return;
+    var b = baseVB(svg), v = zoomSt[key] || b;
+    svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h);
+  }
+  function clampView(v, b) {
+    v.x = Math.max(b.x, Math.min(b.x + b.w - v.w, v.x)); v.y = Math.max(b.y, Math.min(b.y + b.h - v.h, v.y));
+  }
+  function zoomAt(host, key, f, cx, cy) {
+    var svg = host.querySelector('svg'); if (!svg) return;
+    var b = baseVB(svg), v = zoomSt[key] || { x: b.x, y: b.y, w: b.w, h: b.h }, m = svg.getScreenCTM(), r = svg.getBoundingClientRect();
+    if (!m) return;
+    var px = cx == null ? r.left + r.width / 2 : cx, py = cy == null ? r.top + r.height / 2 : cy;
+    var ux = (px - m.e) / m.a, uy = (py - m.f) / m.d;
+    var nw = Math.max(b.w / 30, Math.min(b.w, v.w / f)), k = nw / v.w;
+    var nv = { x: ux - (ux - v.x) * k, y: uy - (uy - v.y) * k, w: nw, h: v.h * k };
+    clampView(nv, b);
+    zoomSt[key] = nw >= b.w - 0.5 ? null : nv;
+    applyZoom(host, key);
+  }
+  function panBy(host, key, dx, dy) {
+    var svg = host.querySelector('svg'), v = zoomSt[key]; if (!svg || !v) return;
+    var m = svg.getScreenCTM(); if (!m) return;
+    v.x -= dx / m.a; v.y -= dy / m.d; clampView(v, baseVB(svg)); applyZoom(host, key);
+  }
+  function wireZoom(host, key, ids) {
+    host.addEventListener('wheel', function (e) { e.preventDefault(); zoomAt(host, key, e.deltaY < 0 ? 1.25 : 1 / 1.25, e.clientX, e.clientY); }, { passive: false });
+    $(ids[0]).addEventListener('click', function () { zoomAt(host, key, 1 / 1.4); });
+    $(ids[1]).addEventListener('click', function () { zoomAt(host, key, 1.4); });
+    $(ids[2]).addEventListener('click', function () { zoomSt[key] = null; applyZoom(host, key); });
+  }
+  (function () {
+    var host = $('#fsBody'), pan = null;
+    wireZoom(host, 'fs', ['#fsZout', '#fsZin', '#fsZfit']);
+    host.addEventListener('pointerdown', function (e) { if (!zoomSt.fs) return; pan = { x: e.clientX, y: e.clientY }; try { host.setPointerCapture(e.pointerId); } catch (err) {} });
+    host.addEventListener('pointermove', function (e) { if (!pan) return; panBy(host, 'fs', e.clientX - pan.x, e.clientY - pan.y); pan.x = e.clientX; pan.y = e.clientY; });
+    host.addEventListener('pointerup', function () { pan = null; });
+    host.addEventListener('pointercancel', function () { pan = null; });
+  })();
+  (function () {
+    var tip = $('#tip');
+    function hide() { tip.hidden = true; }
+    function show(e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+      if (!t || (typeof ed !== 'undefined' && ed.drag && ed.drag.moved)) { hide(); return; }
+      var a = t.getAttribute('data-tip').split('|');
+      tip.innerHTML = '<b>' + esc(a[1]) + '</b> <small>№ ' + esc(a[0]) + '</small><br><span class="tsz">' + esc(a[2]) + '</span><br><small>кант: ' + esc(a[3]) + (a[4] ? ' · ' + esc(a[4]) : '') + '</small>';
+      tip.hidden = false;
+      var w = tip.offsetWidth, h = tip.offsetHeight, x = e.clientX + 14, y = e.clientY + 16;
+      if (x + w > window.innerWidth - 6) x = e.clientX - w - 14;
+      if (y + h > window.innerHeight - 6) y = e.clientY - h - 12;
+      tip.style.left = Math.max(4, x) + 'px'; tip.style.top = Math.max(4, y) + 'px';
+    }
+    document.addEventListener('pointermove', show);
+    document.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch') show(e); else hide(); });
+    document.addEventListener('pointerleave', hide);
+    document.addEventListener('scroll', hide, true);
+    document.addEventListener('keydown', hide);
+  })();
+
+
   /* ---------- Редактор на листа ---------- */
   var ed = { gi: 0, idx: 0, sel: null, drag: null, undo: [], gmap: {}, groups: {}, msg: '', raf: 0 };
   function edG() { return (lastResult && lastResult.res[ed.gi]) || null; }
@@ -2203,6 +2287,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   function edSheets(g) { return g.bins.map(function (b) { return b.items.map(function (it) { return { n: it.p.n, x: it.x, y: it.y, r: !!it.r }; }); }); }
   function edOpen(gi, bi) {
     var g = lastResult && lastResult.res[gi]; if (!g || !g.sigH) return;
+    zoomSt.ed = null;
     ed.gi = gi; ed.idx = bi; ed.sel = null; ed.drag = null; ed.undo = []; ed.msg = ''; edBuildMaps(g);
     $('#ed').hidden = false; document.body.style.overflow = 'hidden';
     edDraw();
@@ -2410,10 +2495,11 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var svg = sheetSVG(bin, g), hit = '', isSel = {};
     (ed.sel || []).forEach(function (n) { isSel[n] = 1; });
     bin.items.forEach(function (it) {
-      hit += '<rect class="edhit' + (isSel[it.p.n] ? ' sel' : '') + (isSel[it.p.n] && ed.drag && ed.drag.bad ? ' bad' : '') + '" data-n="' + it.p.n + '" x="' + (t + it.x) + '" y="' + (t + it.y) + '" width="' + it.w + '" height="' + it.h + '"><title>' + esc(it.p.name) + ' ' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</title></rect>';
+      hit += '<rect class="edhit' + (isSel[it.p.n] ? ' sel' : '') + (isSel[it.p.n] && ed.drag && ed.drag.bad ? ' bad' : '') + '" data-n="' + it.p.n + '" x="' + (t + it.x) + '" y="' + (t + it.y) + '" width="' + it.w + '" height="' + it.h + '" data-tip="' + esc(tipText(it)) + '"></rect>';
     });
     svg = svg.replace('</svg>', hit + '</svg>');
     $('#edBody').innerHTML = svg;
+    applyZoom($('#edBody'), 'ed');
     var area = (+g.m.L) * (+g.m.W);
     $('#edTitle').textContent = g.m.name + ' · лист ' + (ed.idx + 1) + ' от ' + nb;
     $('#edMeta').textContent = fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм';
@@ -2471,7 +2557,14 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var body = $('#edBody');
     body.addEventListener('pointerdown', function (e) {
       var r = e.target.closest ? e.target.closest('.edhit') : null;
-      if (!r) { ed.sel = null; ed.msg = ''; edDraw(); return; }
+      if (zoomSt.ed && (e.button === 1 || e.button === 2 || e.shiftKey)) {
+        ed.pan = { x: e.clientX, y: e.clientY }; try { body.setPointerCapture(e.pointerId); } catch (err) {} e.preventDefault(); return;
+      }
+      if (!r) {
+        ed.sel = null; ed.msg = '';
+        if (zoomSt.ed) { ed.pan = { x: e.clientX, y: e.clientY }; try { body.setPointerCapture(e.pointerId); } catch (err) {} }
+        edDraw(); return;
+      }
       var svg = body.querySelector('svg'), m = svg && svg.getScreenCTM();
       if (!m) return;
       ed.sel = edMembers(+r.getAttribute('data-n')); ed.msg = '';
@@ -2479,7 +2572,10 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       try { body.setPointerCapture(e.pointerId); } catch (err) {}
       e.preventDefault(); edDraw();
     });
+    wireZoom(body, 'ed', ['#edZout', '#edZin', '#edZfit']);
+    body.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     body.addEventListener('pointermove', function (e) {
+      if (ed.pan) { panBy(body, 'ed', e.clientX - ed.pan.x, e.clientY - ed.pan.y); ed.pan.x = e.clientX; ed.pan.y = e.clientY; return; }
       var d = ed.drag; if (!d) return;
       var dx = (e.clientX - d.sx) * d.scale, dy = (e.clientY - d.sy) * d.scale;
       if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) < 4) return;
@@ -2496,6 +2592,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       });
     });
     function end(e) {
+      if (ed.pan) { ed.pan = null; try { body.releasePointerCapture(e.pointerId); } catch (err) {} return; }
       var d = ed.drag; if (!d) return;
       if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
       try { body.releasePointerCapture(e.pointerId); } catch (err) {}
@@ -2513,8 +2610,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     body.addEventListener('pointerup', end);
     body.addEventListener('pointercancel', end);
   })();
-  $('#edPrev').addEventListener('click', function () { ed.idx--; ed.sel = null; ed.msg = ''; edDraw(); });
-  $('#edNext').addEventListener('click', function () { ed.idx++; ed.sel = null; ed.msg = ''; edDraw(); });
+  $('#edPrev').addEventListener('click', function () { zoomSt.ed = null; ed.idx--; ed.sel = null; ed.msg = ''; edDraw(); });
+  $('#edNext').addEventListener('click', function () { zoomSt.ed = null; ed.idx++; ed.sel = null; ed.msg = ''; edDraw(); });
   $('#edRot').addEventListener('click', edRotate);
   $('#edTo').addEventListener('change', function () { if (this.value !== '') edMoveTo(this.value); });
   function edUndo() {
@@ -2856,7 +2953,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '65';
+  var APP_VERSION = '66';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
