@@ -2256,6 +2256,9 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
       if (!t || (typeof ed !== 'undefined' && ed.drag && ed.drag.moved)) { hide(); return; }
       var a = t.getAttribute('data-tip').split('|');
+      // В истински цял екран се виждат само елементите вътре в него, затова балончето се премества там.
+      var host = document.fullscreenElement || document.body;
+      if (tip.parentNode !== host) host.appendChild(tip);
       tip.innerHTML = '<b>' + esc(a[1]) + '</b> <small>№ ' + esc(a[0]) + '</small><br><span class="tsz">' + esc(a[2]) + '</span><br><small>кант: ' + esc(a[3]) + (a[4] ? ' · ' + esc(a[4]) : '') + '</small>';
       tip.hidden = false;
       var w = tip.offsetWidth, h = tip.offsetHeight, x = e.clientX + 14, y = e.clientY + 16;
@@ -2953,7 +2956,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '66';
+  var APP_VERSION = '67';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
