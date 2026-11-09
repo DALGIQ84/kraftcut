@@ -263,6 +263,17 @@ svg .edhit:hover { fill: rgba(242, 177, 31, 0.16); }
 svg .edhit.sel { fill: rgba(242, 177, 31, 0.28); stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; cursor: grabbing; }
 svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 .noguil { color: var(--warn); }
+.offwarn { color: var(--warn); font-weight: 600; font-size: 13px; margin: 8px 0 0; }
+.ed-main { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.ed-main .ed-body { flex: 1; }
+.ed-tray { width: 220px; flex: none; border: 2px dashed var(--line); border-radius: 8px; padding: 8px; overflow: auto; display: flex; flex-direction: column; gap: 6px; align-content: flex-start; }
+.ed-tray.over { border-color: var(--accent); background: var(--accent-soft); color: #1C1F22; }
+.ed-tray-h { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 14px; }
+.ed-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 8px; font-size: 13px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ed-chip:hover { border-color: var(--accent); }
+.ed-chip small { display: block; color: var(--muted); font-size: 12px; }
+.ed-ghost { position: fixed; z-index: 90; pointer-events: none; opacity: .9; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+@media (max-width: 760px) { .ed-main { flex-direction: column; } .ed-tray { width: auto; max-height: 28%; flex-direction: row; flex-wrap: wrap; } }
 @media print { .ed { display: none !important; } }
 
 #printArea { display: none; }
@@ -487,14 +498,18 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       <button id="edNext" type="button">›</button>
       <button id="edRot" type="button" title="Завърти избрания детайл (R)">Завърти</button>
       <label class="hint" style="display:inline-flex;align-items:center;gap:6px">Премести на <select id="edTo" aria-label="Премести избрания детайл на друг лист"></select></label>
+      <button id="edOut" type="button" title="Извади избрания детайл от листа (Delete)">Извади от листа</button>
       <button id="edUndo" type="button" title="Ctrl+Z">Върни</button>
       <button id="edAuto" type="button" title="Връща автоматичната подредба на материала">Автоматично</button>
       <button id="edDone" type="button" class="primary">Готово</button>
     </div>
   </div>
   <div id="edInfo" class="ed-info"></div>
-  <div id="edBody" class="fs-body ed-body"></div>
-  <div class="hint ed-help">Хвани детайл и го премести. Залепва за ръбовете на другите детайли и за листа. Стрелките го движат на 1 мм (Shift = 10 мм), R го завърта, Ctrl+Z връща.</div>
+  <div class="ed-main">
+    <div id="edBody" class="fs-body ed-body"></div>
+    <aside id="edTray" class="ed-tray" aria-label="Детайли извън листа"><div class="ed-tray-h">Извън листа</div><div id="edTrayList" style="display:contents"></div></aside>
+  </div>
+  <div class="hint ed-help">Хвани детайл и го премести. Може да го пуснеш в полето „Извън листа“ вдясно (или бутон „Извади от листа“), а после да го върнеш — кликни го там или го дръпни върху листа. Залепва за ръбовете на другите детайли и за листа. Стрелките го движат на 1 мм (Shift = 10 мм), R го завърта, Ctrl+Z връща.</div>
 </div>
 
 <div id="fs" class="fs" role="dialog" aria-modal="true" aria-label="Схема на рязане на цял екран" hidden>
@@ -1407,6 +1422,11 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       if (p.comp) p.comp.forEach(function (m) { byN[m.n] = m; gmap[m.n] = p.n; count++; });
       else { byN[p.n] = p; count++; }
     });
+    var offList = Array.isArray(man.off) ? man.off : [];
+    offList.forEach(function (o) {
+      if (!byN[o.n] || seen[o.n]) { ok = false; return; }
+      seen[o.n] = 1;
+    });
     man.sheets.forEach(function (sh) {
       if (!ok) return;
       var list = [];
@@ -1421,8 +1441,15 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       });
       if (list.length) bins.push(placedBin(list, W, H, k, mode, trimOn, gmap));
     });
-    if (!ok || Object.keys(seen).length !== count) return null;
+    if (!ok || Object.keys(seen).length !== count || !bins.length) return null;
+    bins.off = offList;
     return bins;
+  }
+  // Детайлите, извадени от листа в редактора (не са на никой лист).
+  function offPieces(g) {
+    var by = {};
+    (g.fit || []).forEach(function (p) { if (p.comp) p.comp.forEach(function (m) { by[m.n] = m; }); else by[p.n] = p; });
+    return (g.off || []).map(function (o) { return by[o.n]; }).filter(Boolean).sort(function (a, b) { return a.n - b.n; });
   }
 
   function compute(budget) {
@@ -1513,7 +1540,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       bins.forEach(function (b) { matUsed += b.used; matCut += b.cutLen || 0; });
       totalSheets += bins.length; usedArea += matUsed; boardArea += bins.length * ML * MW; totalCut += matCut;
       if (+m.price > 0) { anyPrice = true; cost += bins.length * +m.price; }
-      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0), cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn });
+      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0), cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn, off: manualOn ? (bins.off || []) : [] });
     });
     return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut, notes: notes };
   }
@@ -1691,6 +1718,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 
     r.res.forEach(function (g, gi) {
       h += '<div class="matblock" style="margin-top:22px"><div class="mathead"><h3>' + esc(g.m.name) + '</h3><span class="hint mono">' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм · ' + g.bins.length + ' ' + (g.bins.length === 1 ? 'лист' : 'листа') + ' · ' + g.count + ' детайла · ' + (g.m.noGrain ? 'без шарка, детайлите се въртят' : 'по шарката') + (g.algo ? ' · подредба: ' + ALGO[g.algo] : '') + (g.manual ? ' · <b>ръчна подредба</b>' : '') + '</span>' + (g.manual ? '<button type="button" class="fsbtn" data-auto="' + gi + '">Върни автоматичната</button>' : '') + '</div>';
+      var opw = offPieces(g);
+      if (opw.length) h += '<div class="offwarn">⚠ Извън листа (не са в разкроя): ' + opw.map(function (q) { return esc(q.name) + ' ' + fmt(q.L) + '×' + fmt(q.W); }).join(' · ') + '</div>';
       h += '<div class="sheetgrid' + (g.bins.length > 1 ? '' : '') + '">';
       g.bins.forEach(function (b, bi) {
         var oc = offcut(b), area = (+g.m.L) * (+g.m.W);
@@ -2162,7 +2191,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   var ed = { gi: 0, idx: 0, sel: null, drag: null, undo: [], gmap: {}, groups: {}, msg: '', raf: 0 };
   function edG() { return (lastResult && lastResult.res[ed.gi]) || null; }
   function edBuildMaps(g) {
-    ed.gmap = {}; ed.groups = {};
+    ed.gmap = {}; ed.groups = {}; ed.byN = {};
+    (g.fit || []).forEach(function (p) { if (p.comp) p.comp.forEach(function (m) { ed.byN[m.n] = m; }); else ed.byN[p.n] = p; });
     (g.fit || []).forEach(function (p) {
       if (!p.comp) return;
       var ids = []; p.comp.forEach(function (m) { ed.gmap[m.n] = p.n; ids.push(m.n); });
@@ -2222,11 +2252,13 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     items.forEach(function (it) { if (mv[it.n]) { it.x += ox; it.y += oy; } });
     return { items: items, ox: ox, oy: oy, bad: edBad(items, k, W, H, mv) };
   }
-  function edCommit(sheets) {
+  function edOff() { var g = edG(), m = g && state.manual && state.manual[g.m.id]; return (m && m.off) ? m.off : []; }
+  function edCommit(sheets, off) {
     var g = edG(); if (!g || !g.sigH) return;
     state.manual = state.manual || {};
+    if (off === undefined) off = edOff();
     ed.undo.push(JSON.stringify(state.manual[g.m.id] || null)); if (ed.undo.length > 100) ed.undo.shift();
-    state.manual[g.m.id] = { h: g.sigH, sheets: sheets.filter(function (sh) { return sh.length; }) };
+    state.manual[g.m.id] = { h: g.sigH, sheets: sheets.filter(function (sh) { return sh.length; }), off: off };
     save(); edRefresh();
   }
   function edRefresh() { render(compute(0)); edDraw(); }
@@ -2291,6 +2323,83 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     ed.sel = null; ed.drag = null;
     edCommit(sheets);
   }
+  // Вади избраните детайли (или цялата им група) от листа в полето „Извън листа“.
+  function edPark() {
+    var g = edG(); if (!g || !ed.sel || !ed.sel.length) return;
+    var sheets = edSheets(g), src = sheets[ed.idx], mv = {}, mem = [], rest = [];
+    ed.sel.forEach(function (n) { mv[n] = 1; });
+    src.forEach(function (o) { (mv[o.n] ? mem : rest).push(o); });
+    if (!mem.length) return;
+    var total = 0; sheets.forEach(function (sh) { total += sh.length; });
+    if (total - mem.length < 1) { ed.msg = 'Не може да извадиш всички детайли от материала.'; ed.drag = null; edDraw(); return; }
+    var byN = {}; g.bins[ed.idx].items.forEach(function (it) { byN[it.p.n] = it; });
+    var x0 = 1e9, y0 = 1e9;
+    mem.forEach(function (o) { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); });
+    var off = edOff().concat(mem.map(function (o) { return { n: o.n, x: Math.round((o.x - x0) * 10) / 10, y: Math.round((o.y - y0) * 10) / 10, r: !!o.r }; }));
+    sheets[ed.idx] = rest;
+    ed.msg = 'Извадено от листа. Върни го с клик върху него вдясно или го дръпни върху листа.';
+    ed.sel = null; ed.drag = null;
+    edCommit(sheets, off);
+  }
+  function edOffKeys() {
+    var keys = [], seen = {};
+    edOff().forEach(function (o) { var k = ed.gmap[o.n] || o.n; if (!seen[k]) { seen[k] = 1; keys.push(k); } });
+    return keys;
+  }
+  function edOffEntries(key) { return edOff().filter(function (o) { return (ed.gmap[o.n] || o.n) === key; }); }
+  // Връща извадени детайли на лист: pt = точка в мм (дръпнат върху листа) или null = първото свободно място.
+  function edReturn(key, pt) {
+    var g = edG(); if (!g) return;
+    var ent = edOffEntries(key); if (!ent.length) return;
+    var sheets = edSheets(g), bw = 0, bh = 0;
+    ent.forEach(function (o) { var q = ed.byN[o.n]; bw = Math.max(bw, o.x + (o.r ? q.h : q.w)); bh = Math.max(bh, o.y + (o.r ? q.w : q.h)); });
+    var gone = {}; ent.forEach(function (o) { gone[o.n] = 1; });
+    var newOff = edOff().filter(function (o) { return !gone[o.n]; });
+    var tIdx = ed.idx, spot = null, rot = false;
+    function itemsOf(i) { return i < g.bins.length ? g.bins[i].items.map(function (it) { return { n: it.p.n, x: it.x, y: it.y, w: it.w, h: it.h }; }) : []; }
+    if (pt) {
+      var its = itemsOf(ed.idx), k = g.k, T = ed.snap || 10;
+      var px = Math.max(0, Math.min(g.W - bw, pt.x - bw / 2)), py = Math.max(0, Math.min(g.H - bh, pt.y - bh / 2)), nx = px, ny = py;
+      var cx = [0, g.W - bw], cy = [0, g.H - bh];
+      its.forEach(function (o) { cx.push(o.x + o.w + k, o.x - k - bw, o.x, o.x + o.w - bw); cy.push(o.y + o.h + k, o.y - k - bh, o.y, o.y + o.h - bh); });
+      var bd = T; cx.forEach(function (c) { if (Math.abs(c - px) < bd) { bd = Math.abs(c - px); nx = c; } });
+      bd = T; cy.forEach(function (c) { if (Math.abs(c - py) < bd) { bd = Math.abs(c - py); ny = c; } });
+      nx = Math.round(nx * 10) / 10; ny = Math.round(ny * 10) / 10;
+      var hit = its.some(function (o) { return !(nx + bw + k <= o.x + 0.01 || o.x + o.w + k <= nx + 0.01 || ny + bh + k <= o.y + 0.01 || o.y + o.h + k <= ny + 0.01); });
+      if (nx < -0.01 || ny < -0.01 || nx + bw > g.W + 0.01 || ny + bh > g.H + 0.01) hit = true;
+      if (hit) { ed.msg = 'Там не може: опира в друг детайл или излиза от листа. Пусни го на свободно място или кликни върху него за автоматично място.'; edDraw(); return; }
+      spot = { x: nx, y: ny };
+    } else {
+      var order = [ed.idx]; for (var i = 0; i < g.bins.length; i++) if (i !== ed.idx) order.push(i);
+      for (var j = 0; j < order.length && !spot; j++) {
+        var its2 = itemsOf(order[j]);
+        spot = edSpot(its2, bw, bh, g.k, g.W, g.H);
+        if (!spot && ent.length === 1 && ed.byN[ent[0].n].rot) { spot = edSpot(its2, bh, bw, g.k, g.W, g.H); rot = !!spot; }
+        if (spot) tIdx = order[j];
+      }
+      if (!spot) { tIdx = sheets.length; spot = { x: 0, y: 0 }; sheets.push([]); }
+    }
+    var moved = ent.map(function (o) {
+      if (rot) { var q = ed.byN[o.n]; return { n: o.n, x: spot.x, y: spot.y, r: !o.r }; }
+      return { n: o.n, x: spot.x + o.x, y: spot.y + o.y, r: !!o.r };
+    });
+    moved.forEach(function (o) { sheets[tIdx].push(o); });
+    ed.idx = tIdx; ed.sel = ent.map(function (o) { return o.n; }); ed.drag = null;
+    ed.msg = tIdx !== ed.idx ? '' : '';
+    edCommit(sheets, newOff);
+    ed.idx = Math.min(tIdx, edG().bins.length - 1);
+    edDraw();
+  }
+  function edDrawTray() {
+    var h = '', keys = edOffKeys();
+    keys.forEach(function (k) {
+      var ent = edOffEntries(k), q = ed.byN[ent[0].n];
+      if (!q) return;
+      h += '<div class="ed-chip" data-k="' + k + '" title="Клик = върни на лист · дръпни върху листа"><b>' + esc(q.name) + '</b><small>' + fmt(q.L) + '×' + fmt(q.W) + (ent.length > 1 ? ' · група от ' + ent.length : '') + '</small></div>';
+    });
+    if (!keys.length) h = '<div class="hint">Празно. Дръпни детайл тук, за да го извадиш от листа.</div>';
+    $('#edTrayList').innerHTML = h;
+  }
   function edDraw() {
     var g = edG();
     if (!g || !g.bins.length) { edClose(); return; }
@@ -2323,7 +2432,41 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     $('#edRot').disabled = !rotOk;
     $('#edUndo').disabled = !ed.undo.length;
     $('#edAuto').disabled = !g.manual;
+    $('#edOut').disabled = !(ed.sel && ed.sel.length);
+    edDrawTray();
   }
+  function overTray(e) { var r = $('#edTray').getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+  // Дърпане на детайл от полето „Извън листа“ върху листа (или клик = автоматично място).
+  (function () {
+    var tray = $('#edTrayList'), cur = null;
+    tray.addEventListener('pointerdown', function (e) {
+      var c = e.target.closest ? e.target.closest('.ed-chip') : null; if (!c) return;
+      cur = { key: +c.getAttribute('data-k'), el: c, sx: e.clientX, sy: e.clientY, moved: false, ghost: null, id: e.pointerId };
+      try { c.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    tray.addEventListener('pointermove', function (e) {
+      if (!cur) return;
+      if (!cur.moved && Math.abs(e.clientX - cur.sx) + Math.abs(e.clientY - cur.sy) < 5) return;
+      cur.moved = true;
+      if (!cur.ghost) { var gh = cur.el.cloneNode(true); gh.className = 'ed-chip ed-ghost'; gh.style.width = cur.el.offsetWidth + 'px'; document.body.appendChild(gh); cur.ghost = gh; }
+      cur.ghost.style.left = (e.clientX - 20) + 'px'; cur.ghost.style.top = (e.clientY - 14) + 'px';
+    });
+    function done(e) {
+      if (!cur) return; var c = cur; cur = null;
+      try { c.el.releasePointerCapture(c.id); } catch (err) {}
+      if (c.ghost) c.ghost.parentNode.removeChild(c.ghost);
+      if (!c.moved) { ed.sel = null; ed.msg = ''; edReturn(c.key, null); return; }
+      var svg = $('#edBody').querySelector('svg'), m = svg && svg.getScreenCTM(), r = svg && svg.getBoundingClientRect();
+      if (!m || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      var g = edG(), pt = { x: (e.clientX - m.e) / m.a - g.trim, y: (e.clientY - m.f) / m.d - g.trim };
+      ed.snap = Math.max(8, 12 / m.a); ed.msg = '';
+      edReturn(c.key, pt);
+    }
+    tray.addEventListener('pointerup', done);
+    tray.addEventListener('pointercancel', function () { if (cur) { if (cur.ghost) cur.ghost.parentNode.removeChild(cur.ghost); cur = null; } });
+  })();
+  $('#edOut').addEventListener('click', edPark);
   (function () {
     var body = $('#edBody');
     body.addEventListener('pointerdown', function (e) {
@@ -2340,7 +2483,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       var d = ed.drag; if (!d) return;
       var dx = (e.clientX - d.sx) * d.scale, dy = (e.clientY - d.sy) * d.scale;
       if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) < 4) return;
-      d.moved = true; d.dx = dx; d.dy = dy;
+      d.moved = true; d.dx = dx; d.dy = dy; d.scale0 = d.scale;
+      $('#edTray').classList.toggle('over', overTray(e));
       if (d.raf) return;
       d.raf = requestAnimationFrame(function () {
         d.raf = 0; if (ed.drag !== d) return;
@@ -2356,6 +2500,8 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
       try { body.releasePointerCapture(e.pointerId); } catch (err) {}
       var g = edG();
+      $('#edTray').classList.remove('over');
+      if (d.moved && g && overTray(e)) { ed.drag = null; edPark(); return; }
       if (d.moved && g) {
         var res = edCalc(d.dx, d.dy, Math.max(8, 12 * d.scale));
         ed.drag = null;
@@ -2391,6 +2537,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     if (k === 'Escape') { edClose(); return; }
     if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); edUndo(); return; }
     if (k === 'r' || k === 'R') { edRotate(); return; }
+    if ((k === 'Delete' || k === 'Backspace') && ed.sel && ed.sel.length) { e.preventDefault(); edPark(); return; }
     var st = e.shiftKey ? 10 : 1;
     if (ed.sel && ed.sel.length) {
       if (k === 'ArrowLeft') { e.preventDefault(); edNudge(-st, 0); }
@@ -2423,8 +2570,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       var nb = g.bins.length, area = (+g.m.L) * (+g.m.W);
       g.bins.forEach(function (b, bi) {
         h += '<section class="pp"><div class="pph"><span><b>' + esc(title) + '</b> · ' + date + '</span><span><b>' + esc(g.m.name) + '</b> · лист ' + (bi + 1) + ' от ' + nb + ' · ' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм</span></div>';
-        showCuts = true;
-        try { h += sheetSVG(b, g); } finally { showCuts = saved; }
+        h += sheetSVG(b, g);
         var rows = b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; });
         h += '<div class="ppt' + (rows.length > 34 ? ' many' : '') + '"><table><thead><tr><th>№</th><th>Детайл</th><th>Размер</th><th>Кант</th></tr></thead><tbody>';
         rows.forEach(function (it) {
@@ -2432,8 +2578,17 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
           h += '<tr><td>' + it.p.n + '</td><td>' + esc(it.p.name) + (it.r ? ' ↻' : '') + '</td><td>' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</td><td>' + ed + '</td></tr>';
         });
         h += '</tbody></table></div>';
-        h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + ' · цифрите в кръговете са редът на рязане</div></section>';
+        h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + (showCuts ? ' · цифрите в кръговете са редът на рязане' : '') + '</div></section>';
       });
+      var op = offPieces(g);
+      if (op.length) {
+        h += '<section class="pp"><div class="pph"><span><b>' + esc(title) + '</b> · ' + date + '</span><span><b>' + esc(g.m.name) + '</b> · извадени от листа</span></div><div class="ppt"><table><thead><tr><th>№</th><th>Детайл</th><th>Размер</th><th>Кант</th></tr></thead><tbody>';
+        op.forEach(function (q) {
+          var e = q.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
+          h += '<tr><td>' + q.n + '</td><td>' + esc(q.name) + '</td><td>' + fmt(q.L) + '×' + fmt(q.W) + '</td><td>' + ed + '</td></tr>';
+        });
+        h += '</tbody></table></div><div class="ppm">⚠ Тези детайли не са сложени на лист в този разкрой.</div></section>';
+      }
     });
     $('#printArea').innerHTML = h;
     return true;
@@ -2522,7 +2677,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     var man = {};
     if (d.manual && typeof d.manual === 'object') Object.keys(d.manual).forEach(function (ok) {
       var v = d.manual[ok];
-      if (v && typeof v.h === 'string' && Array.isArray(v.sheets)) man[byOld[ok] || ok] = { h: v.h, sheets: v.sheets.map(function (sh) { return (Array.isArray(sh) ? sh : []).map(function (o) { return { n: +o.n, x: +o.x, y: +o.y, r: !!o.r }; }); }) };
+      if (v && typeof v.h === 'string' && Array.isArray(v.sheets)) man[byOld[ok] || ok] = { h: v.h, sheets: v.sheets.map(function (sh) { return (Array.isArray(sh) ? sh : []).map(function (o) { return { n: +o.n, x: +o.x, y: +o.y, r: !!o.r }; }); }), off: (Array.isArray(v.off) ? v.off : []).map(function (o) { return { n: +o.n, x: +o.x || 0, y: +o.y || 0, r: !!o.r }; }) };
     });
     var s = d.s || {};
     return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, idMap: byOld };
@@ -2701,7 +2856,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '64';
+  var APP_VERSION = '65';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
