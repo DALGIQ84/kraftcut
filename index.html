@@ -227,7 +227,7 @@ details.list td, details.list th { padding: 4px 8px; }
     <div class="settings">
       <div class="field"><label class="label" for="projName">Име на разкроя</label><input id="projName" type="text" placeholder="напр. Кухня Петров"></div>
       <div class="field"><span class="label">Запис</span><button id="saveFile" type="button" class="primary">Запази във файл</button> <button id="saveAs" type="button" hidden>Запази като… (избери папка)</button> <button id="saveCsv" type="button">Свали CSV (за OptiCut)</button></div>
-      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><input id="fileIn" type="file" accept=".json,application/json" hidden></div>
+      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><input id="fileIn" type="file" accept=".kcut,.json,application/json" hidden></div>
     </div>
     <div class="row-actions"><span id="fileMsg" class="hint" aria-live="polite"></span><button id="newProj" type="button" class="ghost keep">Нов празен разкрой</button><button id="restorePrev" type="button" class="ghost keep" hidden>Върни последната работа</button><button id="undoOpen" type="button" class="ghost keep" hidden>Върни предишното</button></div>
     <details class="list" id="textBox">
@@ -1847,7 +1847,7 @@ details.list td, details.list th { padding: 4px 8px; }
   }
   function fileName() {
     var n = String(state.name || 'Разкрой').trim().replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 60) || 'Разкрой', d = new Date();
-    return n + ' ' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.json';
+    return n + ' ' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.kcut';
   }
   function showText(txt) {
     var ta = $('#fileText'); $('#textBox').open = true; ta.value = txt; ta.focus(); ta.select();
@@ -1902,7 +1902,7 @@ details.list td, details.list th { padding: 4px 8px; }
       catch (err) { fileHandle = null; }
     }
     try {
-      var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой', accept: { 'application/json': ['.json'] } }] });
+      var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'] } }] });
       await writeHandle(h, txt); fileHandle = h; $('#saveAs').hidden = false;
       msg.textContent = 'Записано в „' + h.name + '“. Следващото „Запази“ обновява същия файл.';
       return true;
@@ -1953,7 +1953,7 @@ details.list td, details.list th { padding: 4px 8px; }
     }).join('\r\n');
   }
   $('#saveCsv').addEventListener('click', async function () {
-    var msg = $('#fileMsg'), txt = csvText(), name = (fileName().replace(/\.json$/i, '') || 'razkroy') + '.csv', dl = null;
+    var msg = $('#fileMsg'), txt = csvText(), name = (fileName().replace(/\.(json|kcut)$/i, '') || 'razkroy') + '.csv', dl = null;
     if (window.razkroyApp) {
       var r = await window.razkroyApp.save(name, txt, true, null);
       msg.textContent = r.canceled ? 'Записът е отказан.' : r.error ? 'Файлът не се запази: ' + r.error : 'CSV е записан в „' + r.path + '“.';
@@ -1981,7 +1981,7 @@ details.list td, details.list th { padding: 4px 8px; }
     }
     if (typeof window.showOpenFilePicker === 'function') {
       try {
-        var hs = await window.showOpenFilePicker({ types: [{ description: 'Разкрой', accept: { 'application/json': ['.json'] } }] });
+        var hs = await window.showOpenFilePicker({ types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'], 'application/json': ['.json'] } }] });
         var f = await hs[0].getFile();
         fileHandle = typeof hs[0].createWritable === 'function' ? hs[0] : null; if (fileHandle) $('#saveAs').hidden = false;
         loadText(await f.text(), f.name);
@@ -2001,6 +2001,18 @@ details.list td, details.list th { padding: 4px 8px; }
     rd.readAsText(f);
     e.target.value = '';
   });
+  // Отваряне с двоен клик върху файл .kcut (когато програмата е инсталирана от Chrome/Edge).
+  if ('launchQueue' in window && window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
+    window.launchQueue.setConsumer(async function (lp) {
+      if (!lp || !lp.files || !lp.files.length) return;
+      try {
+        var h = lp.files[0], f = await h.getFile();
+        fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false;
+        var ov = document.querySelector('.startov'); if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+        loadText(await f.text(), f.name);
+      } catch (err) { $('#fileMsg').textContent = 'Файлът не може да се отвори.'; }
+    });
+  }
   $('#showText').addEventListener('click', function () { showText(JSON.stringify(exportData(), null, 1)); $('#fileMsg').textContent = 'Копирай текста и го запази в бележка или файл.'; });
   $('#loadText').addEventListener('click', function () { loadText($('#fileText').value, ''); });
   $('#undoOpen').addEventListener('click', function () {
