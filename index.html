@@ -230,6 +230,10 @@ body { padding-top: 0; padding-inline: 0; }
 .mbtn:hover, .menu.open > .mbtn { background: var(--accent-soft); color: var(--accent-text); border: 0; }
 .mbtn.nav { font-weight: 500; color: var(--muted); }
 .mbtn.nav:hover { color: var(--accent-text); }
+.mbtn.nav.on { color: var(--ink); font-weight: 700; box-shadow: inset 0 -3px 0 var(--accent); border-radius: 6px 6px 0 0; }
+.navbusy { color: var(--accent-text); font-size: 11px; animation: nb 1s infinite; }
+@keyframes nb { 50% { opacity: .25; } }
+[data-page][hidden] { display: none !important; }
 .mbtn.help { width: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--line); margin-left: 6px; }
 .mpop { display: none; position: absolute; left: 0; top: 38px; min-width: 290px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); padding: 6px; z-index: 60; flex-direction: column; }
 .menu.open > .mpop { display: flex; }
@@ -245,7 +249,7 @@ body { padding-top: 0; padding-inline: 0; }
 .tb-file { font-size: 12.5px; font-weight: 600; color: var(--accent-text); flex: none; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-file:empty { display: none; }
 .tb-dirty { font-size: 12.5px; font-weight: 600; color: var(--warn); white-space: nowrap; flex: none; }
-@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .mbtn.nav { display: none; } .tb-in { gap: 8px; } }
+@media (max-width: 760px) { .tb-proj { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; } .tb-proj input { max-width: none; flex: 1 1 100%; min-width: 0; } .tb-in { gap: 8px; } .mbtn { padding: 0 8px; } }
 .panel { scroll-margin-top: 72px; }
 .tb-in { position: relative; }
 .menu.static { position: static; }
@@ -370,9 +374,9 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   </section>
         </div>
       </div>
-      <button type="button" class="mbtn nav" data-go="hMat">Материали</button>
-      <button type="button" class="mbtn nav" data-go="hParts">Детайли</button>
-      <button type="button" class="mbtn nav" data-go="hRes">Резултат</button>
+      <button type="button" class="mbtn nav" data-go="mat">Материали</button>
+      <button type="button" class="mbtn nav" data-go="parts">Детайли</button>
+      <button type="button" class="mbtn nav" data-go="res">Резултат <span id="navBusy" class="navbusy" hidden>●</span></button>
       <button type="button" class="mbtn help" id="helpBtn" aria-label="Помощ">?</button>
     </div>
     <div class="tb-proj">
@@ -404,7 +408,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     </details>
   </section>
 
-  <section class="panel" aria-labelledby="hMat">
+  <section class="panel" id="pgMat" data-page="mat" aria-labelledby="hMat">
     <div class="panel-head"><h2 id="hMat">Материали</h2><span class="hint">Шарката на материала решава как се подреждат детайлите му: „Има шарка“ значи всички са по шарката, „Без шарка“ значи всички могат да се въртят. Изключения се задават по детайл. Цената е по избор.</span></div>
     <div class="tablebox"><table id="matTable"><thead><tr>
       <th>Име</th><th>Лист, дължина</th><th>Лист, ширина</th><th title="Има шарка: всички детайли от материала са по шарката. Без шарка: всички могат да се въртят. Изключение за отделен детайл се задава в колоната Посока на детайла.">Шарка</th><th>Цена на лист</th><th></th>
@@ -427,7 +431,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     </details>
   </section>
 
-  <section class="panel" aria-labelledby="hParts">
+  <section class="panel" id="pgParts" data-page="parts" aria-labelledby="hParts">
     <div class="panel-head"><h2 id="hParts">Детайли</h2><span class="hint">Кант: Д1 и Д2 са двете дълги страни, Ш1 и Ш2 двете къси. Примерните детайли са за шкаф, замени ги със своите.</span></div>
     <div class="tablebox"><table id="partsTable"><thead><tr>
       <th>Тип детайл</th><th>Дължина</th><th>Ширина</th><th>Бр.</th><th>Материал</th><th title="Според материала: следва настройката Шарка на материала. По шарката: детайлът не се върти. Може да се върти: детайлът се слага и на 90°.">Посока</th><th title="Група за продължение на шарката, напр. чела на шкаф: избери една и съща буква на всички детайли, които стоят заедно на шкафа. В един материал те се режат като един блок от една и съща ивица на листа и никога не се въртят. Бройките се разгъват една след друга: 145 × 2 и 225 × 2 стават 145, 145, 225, 225 в един блок. За втори шкаф ползвай друга буква.">Група</th><th title="Къде стои детайлът в групата, отгоре надолу. Детайли със същия ред са един до друг (отляво надясно, в реда от таблицата), а следващият ред е отдолу. „авто“ = в същия ред като предишния, затова без избор всички детайли от групата са в една линия. Пример за 2×2: двете горни са ред 1, двете долни са ред 2.">Ред в групата</th>
@@ -448,7 +452,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     </details>
   </section>
 
-  <section class="panel" aria-labelledby="hRes">
+  <section class="panel" id="pgRes" data-page="res" aria-labelledby="hRes">
     <div class="panel-head">
       <h2 id="hRes">Резултат</h2>
       <div class="row-actions">
@@ -1836,7 +1840,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   var deepToken = 0;
   var EFFORT_MS = { fast: 8000, mid: 30000, max: 150000 };
   function effortMs() { var v = 'fast'; try { v = localStorage.getItem('razkroy-effort') || 'fast'; } catch (e) {} return EFFORT_MS[v] || 8000; }
-  function setDeepBusy(b) { var sb = $('#stopDeep'); if (sb) sb.hidden = !b; }
+  function setDeepBusy(b) { var sb = $('#stopDeep'); if (sb) sb.hidden = !b; var nb = $('#navBusy'); if (nb) nb.hidden = !b; }
   function totalTried() { return activeSolvers.reduce(function (a, st) { var t = st.i; if (st.wc) for (var key in st.wc) t += st.wc[key]; return a + t; }, 0); }
   /* ---------- Паралелно търсене: всички ядра на компютъра ---------- */
   // Кодът на търсача се пуска и в няколко работника; те търсят независимо и си обменят най-доброто подреждане.
@@ -2785,6 +2789,21 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
   }
+  /* ---------- Страници: Материали / Детайли / Резултат ---------- */
+  var PAGES = ['mat', 'parts', 'res'], curPage = 'parts';
+  try { var sp = localStorage.getItem('razkroy-page'); if (PAGES.indexOf(sp) >= 0) curPage = sp; } catch (e) {}
+  function showPage(name, noScroll) {
+    if (PAGES.indexOf(name) < 0) name = 'parts';
+    curPage = name;
+    PAGES.forEach(function (n) {
+      var sec = document.querySelector('[data-page="' + n + '"]'); if (sec) sec.hidden = n !== name;
+      var b = document.querySelector('.mbtn.nav[data-go="' + n + '"]');
+      if (b) { b.classList.toggle('on', n === name); if (n === name) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+    });
+    try { localStorage.setItem('razkroy-page', name); } catch (e) {}
+    if (!noScroll) window.scrollTo(0, 0);
+  }
+  showPage(curPage, true);
   function loadText(text, label) {
     var msg = $('#fileMsg'), d = null;
     try { d = JSON.parse(text); } catch (err) {}
@@ -2807,7 +2826,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
       savePresets(); fillPresets();
     }
     applyAll();
-    var gotLay = restoredCount; pendingLayout = null; markClean();
+    var gotLay = restoredCount; pendingLayout = null; markClean(); showPage('res');
     msg.textContent = 'Отворен е разкрой' + (c.name ? ' „' + c.name + '“' : '') + (label ? ' от ' + label : '') + '. Предишните данни са заменени.' + (gotLay ? ' Готовото подреждане е взето от файла, не е смятано наново.' : '');
     $('#undoOpen').hidden = false;
   }
@@ -2956,7 +2975,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '67';
+  var APP_VERSION = '68';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -2984,13 +3003,14 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     bar.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
       var go = b.getAttribute('data-go'), act = b.getAttribute('data-do'), eff = b.getAttribute('data-eff');
-      if (go) { var t = g(go); if (t) { var sec = t.closest('section') || t; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+      if (go) { showPage(go); return; }
       if (eff) { var ef = g('effort'); if (ef) { ef.value = eff; ef.dispatchEvent(new Event('change', { bubbles: true })); } closeAll(); return; }
       if (!act) return;
       closeAll();
       if (act === 'astext') { var fp = g('filePanel'); fp.hidden = false; g('textBox').open = true; fp.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if (act === 'print') { doPrint(false); return; }
       if (act === 'pdf') { doPrint(true); return; }
+      if (act === 'deeper' || act === 'copyAll' || act === 'cuts' || act === 'stopDeep') showPage('res', true);
       if (act === 'cuts') { var c = g('showCuts'); if (c) c.click(); return; }
       var o = g(act); if (o) o.click();
     });
@@ -3009,7 +3029,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 
   $('#newProj').addEventListener('click', function () {
     prevState = JSON.parse(JSON.stringify(state)); state = defaults(); fileHandle = null; appPath = null; showFileTag(); applyAll(); markClean();
-    $('#undoOpen').hidden = false; $('#fileMsg').textContent = 'Полетата са изчистени.';
+    $('#undoOpen').hidden = false; $('#fileMsg').textContent = 'Полетата са изчистени.'; showPage('parts');
   });
   $('#restorePrev').addEventListener('click', function () {
     var d = loadPrev(); if (!d) return;
