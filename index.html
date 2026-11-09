@@ -307,6 +307,9 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
 /* ---------- Таблет и телефон: по-големи елементи и карти вместо тясна таблица ---------- */
 html { touch-action: manipulation; }
 @media (pointer: coarse) {
+  /* Дълго натискане върху детайл = балонче, без менюто на Chrome и търсенето на Google. */
+  #out, #fsBody, #edBody, .ed-main, .ed-tray { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #out svg text, #fsBody svg text, #edBody svg text { -webkit-user-select: none; user-select: none; pointer-events: none; }
   input[type="text"], input[type="number"], select, textarea { min-height: 46px; font-size: 16px; }
   button { min-height: 44px; }
   input[type="checkbox"] { width: 28px; height: 28px; }
@@ -2421,13 +2424,24 @@ html { touch-action: manipulation; }
       tip.innerHTML = '<b>' + esc(a[1]) + '</b> <small>№ ' + esc(a[0]) + '</small><br><span class="tsz">' + esc(a[2]) + '</span><br><small>кант: ' + esc(a[3]) + (a[4] ? ' · ' + esc(a[4]) : '') + '</small>';
       tip.hidden = false;
       var w = tip.offsetWidth, h = tip.offsetHeight, x = e.clientX + 14, y = e.clientY + 16;
+      if (e.pointerType === 'touch') {   // с пръст: над пръста, за да не се закрива от ръката
+        x = e.clientX - w / 2; y = e.clientY - h - 34;
+        if (y < 4) y = e.clientY + 40;
+        x = Math.min(Math.max(4, x), window.innerWidth - w - 6);
+        clearTimeout(tip._t); tip._t = setTimeout(hide, 4000);
+      } else {
       if (x + w > window.innerWidth - 6) x = e.clientX - w - 14;
       if (y + h > window.innerHeight - 6) y = e.clientY - h - 12;
+      }
       tip.style.left = Math.max(4, x) + 'px'; tip.style.top = Math.max(4, y) + 'px';
     }
+    document.addEventListener('contextmenu', function (e) {
+      var touch = e.pointerType === 'touch' || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      if (touch && e.target && e.target.closest && e.target.closest('#out svg, #fsBody, #ed')) e.preventDefault();
+    });
     document.addEventListener('pointermove', show);
     document.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch') show(e); else hide(); });
-    document.addEventListener('pointerleave', hide);
+    document.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') hide(); });
     document.addEventListener('scroll', hide, true);
     document.addEventListener('keydown', hide);
   })();
@@ -3145,7 +3159,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '73';
+  var APP_VERSION = '74';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
