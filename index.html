@@ -2055,7 +2055,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
     showCuts = v; $('#showCuts').checked = v;
     $('#showCuts').addEventListener('change', function () { showCuts = this.checked; try { localStorage.setItem('razkroy-cuts', showCuts ? '1' : '0'); } catch (e) {} if (lastResult) render(lastResult); });
   })();
-  $('#deeper').addEventListener('click', function () { activeSolvers.forEach(function (st) { st.frozen = false; }); deepen(effortMs()); });
+  $('#deeper').addEventListener('click', function () { if (!deepBase) deepBase = shownMap(); activeSolvers.forEach(function (st) { st.frozen = false; }); deepen(effortMs()); });
   $('#stopDeep').addEventListener('click', function () { deepToken++; setDeepBusy(false); haltWorkers(); $('#prog').textContent = 'Спряно · показано е най-доброто до момента (опитани: ' + fmt(totalTried()) + ')'; });
   (function () { var v = 'fast'; try { v = localStorage.getItem('razkroy-effort') || 'fast'; } catch (e) {} $('#effort').value = EFFORT_MS[v] ? v : 'fast';
     $('#effort').addEventListener('change', function () { try { localStorage.setItem('razkroy-effort', this.value); } catch (e) {} deepen(effortMs()); }); })();
@@ -2448,8 +2448,16 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   /* ---------- Незапазени промени ---------- */
   var cleanSig = '';
   function coreSig() { return JSON.stringify([state.name || '', state.s, state.materials, state.parts, state.manual || {}]); }
-  function markClean() { cleanSig = coreSig(); updateDirtyTag(); }
-  function isDirty() { return !!(state.parts && state.parts.length) && coreSig() !== cleanSig; }
+  // Ново подреждане (бутон „Търси по-добро подреждане“) също е промяна — подреждането се записва във файла.
+  var deepBase = null;
+  function shownMap() { var m = {}; activeSolvers.forEach(function (st) { if (st.matId) m[st.matId] = shown(st) || null; }); return m; }
+  function layChanged() {
+    if (!deepBase) return false;
+    var now = shownMap();
+    return Object.keys(now).some(function (k) { return now[k] && deepBase[k] && now[k] !== deepBase[k]; });
+  }
+  function markClean() { cleanSig = coreSig(); deepBase = null; updateDirtyTag(); }
+  function isDirty() { return !!(state.parts && state.parts.length) && (coreSig() !== cleanSig || layChanged()); }
   function updateDirtyTag() { var t = document.getElementById('tbDirty'); if (t) t.hidden = !isDirty(); }
   setInterval(updateDirtyTag, 800);
   window.addEventListener('beforeunload', function (e) { if (isDirty()) { e.preventDefault(); e.returnValue = ''; return ''; } });
@@ -2685,7 +2693,7 @@ svg .edhit.bad { fill: rgba(214, 48, 48, 0.38); stroke: #d63030; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '62';
+  var APP_VERSION = '63';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
