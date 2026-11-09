@@ -1319,7 +1319,13 @@ body { padding-top: 0; padding-inline: 0; }
         var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0]);
         var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big');
         st.matId = m.id;
-        if (pendingLayout && !st.restoredTried) { st.restoredTried = true; var pl = pendingLayout[m.id]; if (pl && pl.h === sigHash(sig) && st.i === 0 && !st.best) restoreSolver(st, pl); }
+        if (pendingLayout) {
+          var pl = pendingLayout[m.id];
+          if (pl && pl.h === sigHash(sig)) {
+            if (st.i === 0 && !st.best) restoreSolver(st, pl);
+            else if (st.best) { st.frozen = true; restoredCount++; }
+          }
+        }
         if (!st.frozen) stepSolver(st, budget);
         activeSolvers.push(st);
         var fin = shown(st);
@@ -2178,7 +2184,7 @@ body { padding-top: 0; padding-inline: 0; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '57';
+  var APP_VERSION = '58';
   (function () { var v = document.getElementById('tbVer'); if (v) v.textContent = 'v' + APP_VERSION; try { document.title = 'KRAFTCUT v' + APP_VERSION; } catch (e) {} })();
   (function () {
     var bar = document.getElementById('topbar'); if (!bar) return;
