@@ -3146,20 +3146,21 @@ html { touch-action: manipulation; }
     e.target.value = '';
   });
   // Отваряне с двоен клик върху файл .kcut (когато програмата е инсталирана от Chrome/Edge).
+  var startClose = null, launched = false;
   if ('launchQueue' in window && window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
     window.launchQueue.setConsumer(async function (lp) {
       if (!lp || !lp.files || !lp.files.length) return;
       try {
         var h = lp.files[0], f = await h.getFile();
         fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null;
-        var ov = document.querySelector('.startov'); if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+        launched = true; if (startClose) startClose();
         loadText(await f.text(), f.name); showFileTag();
       } catch (err) { $('#fileMsg').textContent = 'Файлът не може да се отвори.'; }
     });
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '74';
+  var APP_VERSION = '75';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -3234,7 +3235,7 @@ html { touch-action: manipulation; }
   // Стартов избор: нов разкрой или последния ползван.
   (function () {
     var prev = loadPrev();
-    if (!(prev && prev.parts && prev.parts.length && state.parts.length === 0)) return;
+    if (launched || !(prev && prev.parts && prev.parts.length && state.parts.length === 0)) return;
     var pcs = 0, mats = [];
     prev.parts.forEach(function (p) { pcs += Math.max(1, Math.floor(+p.q || 1)); });
     (prev.materials || []).forEach(function (m) { if (m && m.name) mats.push(m.name); });
@@ -3248,6 +3249,7 @@ html { touch-action: manipulation; }
     function closeStart() { document.removeEventListener('keydown', onKey); if (ov.parentNode) ov.parentNode.removeChild(ov); }
     function onKey(e) { if (e.key === 'Escape') closeStart(); }
     document.addEventListener('keydown', onKey);
+    startClose = closeStart;
     $('#stNew').addEventListener('click', closeStart);
     $('#stLast').addEventListener('click', function () { $('#restorePrev').click(); closeStart(); });
     $('#stFile').addEventListener('click', function () { closeStart(); $('#openFile').click(); });
