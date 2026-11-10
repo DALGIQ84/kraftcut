@@ -2984,7 +2984,7 @@ html { touch-action: manipulation; }
     var msg = $('#fileMsg'), d = null;
     try { d = JSON.parse(text); } catch (err) {}
     var c = cleanProject(d);
-    if (!c) { msg.textContent = 'Това не е разкрой от тази програма или данните са повредени.'; return; }
+    if (!c) { msg.textContent = 'Това не е разкрой от тази програма или данните са повредени.'; return false; }
     prevState = JSON.parse(JSON.stringify(state));
     state = c;
     pendingLayout = null; restoredCount = 0;
@@ -3005,6 +3005,7 @@ html { touch-action: manipulation; }
     var gotLay = restoredCount; pendingLayout = null; markClean(); showPage('res');
     msg.textContent = 'Отворен е разкрой' + (c.name ? ' „' + c.name + '“' : '') + (label ? ' от ' + label : '') + '. Предишните данни са заменени.' + (gotLay ? ' Готовото подреждане е взето от файла, не е смятано наново.' : '');
     $('#undoOpen').hidden = false;
+    return true;
   }
   $('#projName').addEventListener('input', function (e) { state.name = e.target.value; save(); });
   // Директен избор на папка и файл (Chrome/Edge на компютър). Ако изгледът не го позволява, ползваме обикновено сваляне.
@@ -3025,7 +3026,20 @@ html { touch-action: manipulation; }
     t.textContent = n ? 'Файл: ' + n : '';
     t.title = !n ? '' : (direct ? '„Запази“ записва в този файл' : 'Този браузър не може да презаписва файла: „Запази“ сваля нов файл');
   }
-  async function writeHandle(h, txt) { var w = await h.createWritable(); await w.write(txt); await w.close(); }
+  // Записът се проверява: след затваряне файлът се чете отново и размерът му трябва да съвпада.
+  // (Папки със синхронизация или защита понякога оставят празен файл без никаква грешка.)
+  async function writeHandle(h, txt) {
+    var w = await h.createWritable(); await w.write(txt); await w.close();
+    var want = new Blob([txt]).size, got = -1;
+    try { got = (await h.getFile()).size; } catch (e) { got = -1; }
+    if (got !== -1 && got !== want) { var er = new Error('size ' + got + '/' + want); er.name = 'VerifyError'; throw er; }
+  }
+  async function failedWrite(name, txt) {
+    var msg = $('#fileMsg'); fileHandle = null; showFileTag();
+    await saveDownload(txt);
+    msg.textContent = '⚠ Записът във „' + name + '“ НЕ успя (файлът остана празен или непълен). За да не загубиш работата, е свален нов файл. Провери папката (синхронизация, права за запис). ' + msg.textContent;
+    if (msg.title !== undefined) msg.title = msg.textContent;
+  }
   async function saveWithPicker(txt, forcePick) {
     var msg = $('#fileMsg');
     if (fileHandle && !forcePick) {
@@ -3034,6 +3048,7 @@ html { touch-action: manipulation; }
         if (!(await ensureWrite(fileHandle))) { msg.textContent = 'Няма разрешение за запис във „' + hn + '“. Натисни „Запази“ пак и избери „Разреши“.'; return true; }
         await writeHandle(fileHandle, txt); markClean(); msg.textContent = 'Записано в „' + hn + '“ (същият файл).'; return true;
       } catch (err) {
+        if (err && err.name === 'VerifyError') { await failedWrite(hn, txt); return true; }
         if (err && err.name === 'NotFoundError') { fileHandle = null; showFileTag(); msg.textContent = 'Файлът „' + hn + '“ не е намерен (преместен или изтрит). Избери къде да се запише.'; }
         else if (err && (err.name === 'SecurityError' || err.name === 'TypeError')) { fileHandle = null; showFileTag(); }
         else { msg.textContent = 'Записът във „' + hn + '“ не успя (' + (err && err.name || 'грешка') + '). Файлът не е променен. Опитай пак или „Запази като“.'; return true; }
@@ -3041,7 +3056,8 @@ html { touch-action: manipulation; }
     }
     try {
       var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'] } }] });
-      await writeHandle(h, txt); fileHandle = h; appPath = null; showFileTag(); $('#saveAs').hidden = false;
+      try { await writeHandle(h, txt); } catch (er) { if (er && er.name === 'VerifyError') { await failedWrite(h.name, txt); return true; } throw er; }
+      fileHandle = h; appPath = null; softName = null; showFileTag(); $('#saveAs').hidden = false;
       markClean(); msg.textContent = 'Записано в „' + h.name + '“. Следващото „Запази“ обновява същия файл.';
       return true;
     } catch (err) {
@@ -3123,14 +3139,14 @@ html { touch-action: manipulation; }
       var r = await window.razkroyApp.open();
       if (r.canceled) return;
       if (r.error) { $('#fileMsg').textContent = 'Файлът не може да се прочете: ' + r.error; return; }
-      appPath = r.path; fileHandle = null; $('#saveAs').hidden = false; loadText(r.text, r.name); showFileTag(); return;
+      if (loadText(r.text, r.name)) { appPath = r.path; fileHandle = null; $('#saveAs').hidden = false; } showFileTag(); return;
     }
     if (typeof window.showOpenFilePicker === 'function') {
       try {
         var hs = await window.showOpenFilePicker({ types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'], 'application/json': ['.json'] } }] });
         var f = await hs[0].getFile();
-        fileHandle = typeof hs[0].createWritable === 'function' ? hs[0] : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null;
-        loadText(await f.text(), f.name); showFileTag();
+        if (loadText(await f.text(), f.name)) { fileHandle = typeof hs[0].createWritable === 'function' ? hs[0] : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
+        showFileTag();
         return;
       } catch (err) {
         if (err && err.name === 'AbortError') return;
@@ -3142,7 +3158,7 @@ html { touch-action: manipulation; }
     var f = e.target.files && e.target.files[0];
     if (!f) return;
     var rd = new FileReader();
-    rd.onload = function () { fileHandle = null; appPath = null; loadText(String(rd.result), f.name); softName = f.name; showFileTag(); };
+    rd.onload = function () { if (loadText(String(rd.result), f.name)) { fileHandle = null; appPath = null; softName = f.name; } showFileTag(); };
     rd.onerror = function () { $('#fileMsg').textContent = 'Файлът не може да се прочете.'; };
     rd.readAsText(f);
     e.target.value = '';
@@ -3154,18 +3170,18 @@ html { touch-action: manipulation; }
       if (!lp || !lp.files || !lp.files.length) return;
       try {
         var h = lp.files[0], f = await h.getFile();
-        fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null;
         launched = true; if (startClose) startClose();
-        loadText(await f.text(), f.name); showFileTag();
+        if (loadText(await f.text(), f.name)) { fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
+        showFileTag();
       } catch (err) { $('#fileMsg').textContent = 'Файлът не може да се отвори.'; }
     });
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '76';
+  var APP_VERSION = '77';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
-    new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
   })();
   (function () { var v = document.getElementById('tbVer'); if (v) v.textContent = 'v' + APP_VERSION; try { document.title = 'KRAFTCUT v' + APP_VERSION; } catch (e) {} })();
   (function () {
