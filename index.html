@@ -1704,7 +1704,7 @@ html { touch-action: manipulation; }
   // Текст за балончето при посочване на детайл: № | име | размер | кант | завъртян
   function tipText(it) {
     var e = it.p.e || [0, 0, 0, 0], ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
-    return [it.p.n, String(it.p.name || 'Детайл'), fmt(it.p.L) + '×' + fmt(it.p.W) + ' мм', ed || 'без кант', it.r ? 'завъртян' : ''].join('|');
+    return [it.p.n, String(it.p.name || 'Детайл'), fmt(it.p.L) + '×' + fmt(it.p.W) + ' мм', ed || 'без кант', it.r ? 'завъртян' : ''].map(function (x) { return encodeURIComponent(String(x)); }).join('|');
   }
   function pieceLabel(it, x, y, ip) {
     var side = sideLabels(it, x, y, ip);
@@ -2417,7 +2417,7 @@ html { touch-action: manipulation; }
     function show(e) {
       var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
       if (!t || (typeof ed !== 'undefined' && ed.drag && ed.drag.moved)) { hide(); return; }
-      var a = t.getAttribute('data-tip').split('|');
+      var a = t.getAttribute('data-tip').split('|').map(function (x) { try { return decodeURIComponent(x); } catch (er) { return x; } });
       // В истински цял екран се виждат само елементите вътре в него, затова балончето се премества там.
       var host = document.fullscreenElement || document.body;
       if (tip.parentNode !== host) host.appendChild(tip);
@@ -3128,7 +3128,7 @@ html { touch-action: manipulation; }
       return;
     }
     try {
-      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = name.replace(/[^\x20-\x7e]+/g, '').replace(/^\s*\d/, 'razkroy $&').replace(/^\s+/, '') || 'razkroy.csv';
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = name.replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'razkroy.csv';
       document.body.appendChild(a); a.click(); a.remove(); msg.textContent = 'Файлът „' + name + '“ е свален.';
     } catch (err) { showText(txt); msg.textContent = 'Записът във файл не е наличен. Данните са показани като текст по-долу, копирай ги.'; }
   });
@@ -3178,7 +3178,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '77';
+  var APP_VERSION = '78';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
