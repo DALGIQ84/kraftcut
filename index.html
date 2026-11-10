@@ -3008,7 +3008,7 @@ html { touch-action: manipulation; }
   }
   $('#projName').addEventListener('input', function (e) { state.name = e.target.value; save(); });
   // Директен избор на папка и файл (Chrome/Edge на компютър). Ако изгледът не го позволява, ползваме обикновено сваляне.
-  var fileHandle = null, canPick = typeof window.showSaveFilePicker === 'function';
+  var fileHandle = null, softName = null, canPick = typeof window.showSaveFilePicker === 'function';
   function pickerBlocked(err) { return err && (err.name === 'SecurityError' || err.name === 'NotAllowedError' || err.name === 'TypeError'); }
   async function ensureWrite(h) {
     try {
@@ -3020,8 +3020,10 @@ html { touch-action: manipulation; }
   }
   function showFileTag() {
     var t = document.getElementById('tbFile'); if (!t) return;
-    var n = fileHandle ? fileHandle.name : (appPath ? String(appPath).split(/[\\\/]/).pop() : '');
-    t.textContent = n ? 'Файл: ' + n : ''; t.title = n ? '„Запази“ записва в този файл' : '';
+    var direct = !!(fileHandle || appPath);
+    var n = fileHandle ? fileHandle.name : (appPath ? String(appPath).split(/[\\\/]/).pop() : (softName || ''));
+    t.textContent = n ? 'Файл: ' + n : '';
+    t.title = !n ? '' : (direct ? '„Запази“ записва в този файл' : 'Този браузър не може да презаписва файла: „Запази“ сваля нов файл');
   }
   async function writeHandle(h, txt) { var w = await h.createWritable(); await w.write(txt); await w.close(); }
   async function saveWithPicker(txt, forcePick) {
@@ -3056,12 +3058,12 @@ html { touch-action: manipulation; }
         var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/octet-stream' }));
         a.download = fileName().replace(/[\\\/:*?"<>|]+/g, ' ').trim() || 'razkroy.kcut';
         document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-        markClean(); msg.textContent = 'Файлът „' + a.download + '“ е свален в „Изтеглени“. Този браузър не може да презаписва файла, затова всеки запис е нов файл.';
+        markClean(); softName = a.download; showFileTag(); msg.textContent = 'Файлът „' + a.download + '“ е свален в „Изтеглени“. Този браузър не може да презаписва файла, затова всеки запис е нов файл.';
       } catch (err) { showText(txt); msg.textContent = 'Записът във файл не е наличен. Данните са показани като текст по-долу, копирай ги.'; }
       return;
     }
     try {
-      await dl.save({ filename: fileName(), data: txt }); markClean();
+      await dl.save({ filename: fileName(), data: txt }); markClean(); softName = fileName(); showFileTag();
       msg.textContent = 'Файлът „' + fileName() + '“ е запазен чрез браузъра. Ако не си избрал папка, намери го в „Изтеглени“. За да избираш папка всеки път, включи в браузъра „Питай къде да се запази всеки файл“.';
     } catch (err) {
       if (err && err.code === 'declined') { msg.textContent = 'Записът е отказан.'; return; }
@@ -3140,7 +3142,7 @@ html { touch-action: manipulation; }
     var f = e.target.files && e.target.files[0];
     if (!f) return;
     var rd = new FileReader();
-    rd.onload = function () { fileHandle = null; appPath = null; loadText(String(rd.result), f.name); showFileTag(); };
+    rd.onload = function () { fileHandle = null; appPath = null; loadText(String(rd.result), f.name); softName = f.name; showFileTag(); };
     rd.onerror = function () { $('#fileMsg').textContent = 'Файлът не може да се прочете.'; };
     rd.readAsText(f);
     e.target.value = '';
@@ -3160,7 +3162,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '75';
+  var APP_VERSION = '76';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
@@ -3213,13 +3215,13 @@ html { touch-action: manipulation; }
   });
 
   $('#newProj').addEventListener('click', function () {
-    prevState = JSON.parse(JSON.stringify(state)); state = defaults(); fileHandle = null; appPath = null; showFileTag(); applyAll(); markClean();
+    prevState = JSON.parse(JSON.stringify(state)); state = defaults(); fileHandle = null; appPath = null; softName = null; showFileTag(); applyAll(); markClean();
     $('#undoOpen').hidden = false; $('#fileMsg').textContent = 'Полетата са изчистени.'; showPage('parts');
   });
   $('#restorePrev').addEventListener('click', function () {
     var d = loadPrev(); if (!d) return;
     prevState = JSON.parse(JSON.stringify(state)); state = d;
-    fileHandle = null; appPath = null; showFileTag();
+    fileHandle = null; appPath = null; softName = null; showFileTag();
     pendingLayout = null; restoredCount = 0;
     try { var sl = JSON.parse(localStorage.getItem('razkroy-lay-v1') || 'null'); if (sl && sl.v === 1) pendingLayout = sl.m; } catch (e) {}
     applyAll(); pendingLayout = null; cleanSig = null; updateDirtyTag();
