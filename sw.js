@@ -1,5 +1,5 @@
 // KRAFTCUT: кешира програмата, за да работи и без интернет след инсталиране.
-var CACHE = 'kraftcut-v31';
+var CACHE = 'kraftcut-v32';
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'favicon.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
