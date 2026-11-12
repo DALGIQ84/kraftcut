@@ -3029,6 +3029,14 @@ html { touch-action: manipulation; }
   // Записът се проверява: след затваряне файлът се чете отново и размерът му трябва да съвпада.
   // (Папки със синхронизация или защита понякога оставят празен файл без никаква грешка.)
   async function writeHandle(h, txt) {
+    var delays = [0, 700, 2000], last = null;
+    for (var i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise(function (r) { setTimeout(r, delays[i]); });
+      try { return await writeOnce(h, txt); } catch (e) { last = e; if (e && e.name === 'AbortError') throw e; }
+    }
+    throw last;
+  }
+  async function writeOnce(h, txt) {
     var w = await h.createWritable(); await w.write(txt); await w.close();
     var want = new Blob([txt]).size, got = -1;
     try { got = (await h.getFile()).size; } catch (e) { got = -1; }
@@ -3046,16 +3054,29 @@ html { touch-action: manipulation; }
       try { got = (await h.getFile()).size; } catch (e) { return; }
       if (got === want) { if (stage === 0) recheck(h, want, txt, seq, 1); return; }
       var msg = $('#fileMsg');
-      if (stage === 2) { await failedWrite(h.name, txt); return; }
+      if (stage === 2) { await writeFailed(h, new Error('файлът се връща празен след записа'), txt, false); return; }
       try { await writeHandle(h, txt); if (seq === saveSeq) msg.textContent = 'Файлът „' + h.name + '“ беше променен след записа (най-често от синхронизация) и е записан наново (' + kb(want) + ').'; recheck(h, want, txt, seq, 2); return; } catch (e) {}
-      if (seq === saveSeq) await failedWrite(h.name, txt);
+      if (seq === saveSeq) await writeFailed(h, new Error('файлът е празен след записа'), txt, false);
     }, stage === 1 ? 12000 : 3000);
   }
-  async function failedWrite(name, txt) {
-    var msg = $('#fileMsg'); fileHandle = null; showFileTag();
-    await saveDownload(txt);
-    msg.textContent = '⚠ Записът във „' + name + '“ НЕ успя (файлът остана празен или непълен). За да не загубиш работата, е свален нов файл. Провери папката (синхронизация, права за запис). ' + msg.textContent;
-    if (msg.title !== undefined) msg.title = msg.textContent;
+  // Неуспешен запис: нищо не се сваля само. Показва се точната грешка; копие в „Изтеглени“ само ако човекът поиска.
+  async function writeFailed(h, er, txt, created) {
+    var name = (h && h.name) || 'файла';
+    var info = ((er && er.name) || 'грешка') + (er && er.message ? ': ' + er.message : '');
+    if (created && h && h.remove) { try { if ((await h.getFile()).size === 0) await h.remove(); } catch (e) {} }  // не оставяме празен файл
+    var b = document.getElementById('saveErr');
+    if (!b) {
+      b = document.createElement('div'); b.id = 'saveErr';
+      b.style.cssText = 'position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:9999;width:min(660px,94vw);box-sizing:border-box;background:#fff;color:#222;border:2px solid #C0392B;border-radius:10px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.28);font:inherit';
+      document.body.appendChild(b);
+    }
+    b.innerHTML = '<div style="font-weight:700;color:#C0392B;margin-bottom:6px">⚠ Записът във „' + esc(name) + '“ НЕ успя</div>' +
+      '<div style="margin-bottom:6px">Разкроят си е в програмата и не е загубен, но още не е записан във файл. Нищо не е свалено в „Изтеглени“.</div>' +
+      '<div style="font-size:12px;color:#666;margin-bottom:10px;word-break:break-word">Грешка: ' + esc(info) + '</div>' +
+      '<div style="margin-bottom:10px">Опитай „Запази като…“ в друга папка (например извън синхронизираната), или поискай копие.</div>' +
+      '<button type="button" id="saveErrCopy" class="mbtn" style="margin-right:8px">Свали копие в „Изтеглени“</button><button type="button" id="saveErrX" class="mbtn">Затвори</button>';
+    document.getElementById('saveErrX').onclick = function () { b.remove(); };
+    document.getElementById('saveErrCopy').onclick = function () { b.remove(); saveDownload(txt); };
   }
   async function saveWithPicker(txt, forcePick) {
     var msg = $('#fileMsg');
@@ -3065,15 +3086,15 @@ html { touch-action: manipulation; }
         if (!(await ensureWrite(fileHandle))) { msg.textContent = 'Няма разрешение за запис във „' + hn + '“. Натисни „Запази“ пак и избери „Разреши“.'; return true; }
         var sz = await writeHandle(fileHandle, txt); markClean(); msg.textContent = 'Записано в „' + hn + '“ (същият файл, ' + kb(sz) + ').'; recheck(fileHandle, sz, txt, ++saveSeq, 0); return true;
       } catch (err) {
-        if (err && err.name === 'VerifyError') { await failedWrite(hn, txt); return true; }
+        if (err && err.name === 'VerifyError') { await writeFailed(fileHandle, err, txt, false); return true; }
         if (err && err.name === 'NotFoundError') { fileHandle = null; showFileTag(); msg.textContent = 'Файлът „' + hn + '“ не е намерен (преместен или изтрит). Избери къде да се запише.'; }
         else if (err && (err.name === 'SecurityError' || err.name === 'TypeError')) { fileHandle = null; showFileTag(); }
-        else { msg.textContent = 'Записът във „' + hn + '“ не успя (' + (err && err.name || 'грешка') + '). Файлът не е променен. Опитай пак или „Запази като“.'; return true; }
+        else { await writeFailed(fileHandle, err, txt, false); return true; }
       }
     }
     try {
       var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'] } }] });
-      var sz2; try { sz2 = await writeHandle(h, txt); } catch (er) { if (er && er.name === 'VerifyError') { await failedWrite(h.name, txt); return true; } throw er; }
+      var sz2; try { sz2 = await writeHandle(h, txt); } catch (er) { await writeFailed(h, er, txt, true); return true; }
       fileHandle = h; appPath = null; softName = null; showFileTag(); $('#saveAs').hidden = false;
       markClean(); msg.textContent = 'Записано в „' + h.name + '“ (' + kb(sz2) + '). Следващото „Запази“ обновява същия файл.'; recheck(h, sz2, txt, ++saveSeq, 0);
       return true;
@@ -3195,7 +3216,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '79';
+  var APP_VERSION = '80';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
