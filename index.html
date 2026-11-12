@@ -3033,6 +3033,23 @@ html { touch-action: manipulation; }
     var want = new Blob([txt]).size, got = -1;
     try { got = (await h.getFile()).size; } catch (e) { got = -1; }
     if (got !== -1 && got !== want) { var er = new Error('size ' + got + '/' + want); er.name = 'VerifyError'; throw er; }
+    return want;
+  }
+  function kb(n) { return n < 1024 ? n + ' Б' : (n / 1024 < 10 ? (n / 1024).toFixed(1).replace('.', ',') : Math.round(n / 1024)) + ' КБ'; }
+  // Втора проверка след 3 и 12 секунди: ако нещо (синхронизация, антивирус) е върнало или изпразнило файла след записа,
+  // записваме го наново, а ако пак не стане — сваляме копие и предупреждаваме.
+  var saveSeq = 0;
+  function recheck(h, want, txt, seq, stage) {
+    setTimeout(async function () {
+      if (seq !== saveSeq || fileHandle !== h) return;
+      var got = -1;
+      try { got = (await h.getFile()).size; } catch (e) { return; }
+      if (got === want) { if (stage === 0) recheck(h, want, txt, seq, 1); return; }
+      var msg = $('#fileMsg');
+      if (stage === 2) { await failedWrite(h.name, txt); return; }
+      try { await writeHandle(h, txt); if (seq === saveSeq) msg.textContent = 'Файлът „' + h.name + '“ беше променен след записа (най-често от синхронизация) и е записан наново (' + kb(want) + ').'; recheck(h, want, txt, seq, 2); return; } catch (e) {}
+      if (seq === saveSeq) await failedWrite(h.name, txt);
+    }, stage === 1 ? 12000 : 3000);
   }
   async function failedWrite(name, txt) {
     var msg = $('#fileMsg'); fileHandle = null; showFileTag();
@@ -3046,7 +3063,7 @@ html { touch-action: manipulation; }
       var hn = fileHandle.name;
       try {
         if (!(await ensureWrite(fileHandle))) { msg.textContent = 'Няма разрешение за запис във „' + hn + '“. Натисни „Запази“ пак и избери „Разреши“.'; return true; }
-        await writeHandle(fileHandle, txt); markClean(); msg.textContent = 'Записано в „' + hn + '“ (същият файл).'; return true;
+        var sz = await writeHandle(fileHandle, txt); markClean(); msg.textContent = 'Записано в „' + hn + '“ (същият файл, ' + kb(sz) + ').'; recheck(fileHandle, sz, txt, ++saveSeq, 0); return true;
       } catch (err) {
         if (err && err.name === 'VerifyError') { await failedWrite(hn, txt); return true; }
         if (err && err.name === 'NotFoundError') { fileHandle = null; showFileTag(); msg.textContent = 'Файлът „' + hn + '“ не е намерен (преместен или изтрит). Избери къде да се запише.'; }
@@ -3056,9 +3073,9 @@ html { touch-action: manipulation; }
     }
     try {
       var h = await window.showSaveFilePicker({ suggestedName: fileName(), types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'] } }] });
-      try { await writeHandle(h, txt); } catch (er) { if (er && er.name === 'VerifyError') { await failedWrite(h.name, txt); return true; } throw er; }
+      var sz2; try { sz2 = await writeHandle(h, txt); } catch (er) { if (er && er.name === 'VerifyError') { await failedWrite(h.name, txt); return true; } throw er; }
       fileHandle = h; appPath = null; softName = null; showFileTag(); $('#saveAs').hidden = false;
-      markClean(); msg.textContent = 'Записано в „' + h.name + '“. Следващото „Запази“ обновява същия файл.';
+      markClean(); msg.textContent = 'Записано в „' + h.name + '“ (' + kb(sz2) + '). Следващото „Запази“ обновява същия файл.'; recheck(h, sz2, txt, ++saveSeq, 0);
       return true;
     } catch (err) {
       if (err && err.name === 'AbortError') { msg.textContent = 'Записът е отказан.'; return true; }
@@ -3178,7 +3195,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '78';
+  var APP_VERSION = '79';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
