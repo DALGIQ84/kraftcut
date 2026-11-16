@@ -407,6 +407,7 @@ html { touch-action: manipulation; }
         <div class="mpop" role="menu">
           <button type="button" role="menuitem" data-do="newProj">Нов празен разкрой</button>
           <button type="button" role="menuitem" data-do="openFile">Отвори от файл…</button>
+          <button type="button" role="menuitem" data-do="addFile">Добави от файл…</button>
           <button type="button" role="menuitem" data-do="restorePrev" data-hid="restorePrev">Върни последната работа</button>
           <hr>
           <button type="button" role="menuitem" data-do="saveFile">Запази</button>
@@ -476,7 +477,7 @@ html { touch-action: manipulation; }
     <div class="panel-head"><h2 id="hFile">Файл на разкроя</h2><span class="hint">Запази целия разкрой във файл и го отвори на друг компютър.</span></div>
     <div class="settings">
             <div class="field"><span class="label">Запис</span><button id="saveFile" type="button" class="primary">Запази във файл</button> <button id="saveAs" type="button" hidden>Запази като… (избери папка)</button> <button id="saveCsv" type="button">Свали CSV (за OptiCut)</button></div>
-      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><input id="fileIn" type="file" accept=".kcut,.json,application/json,application/octet-stream,text/plain" hidden></div>
+      <div class="field"><span class="label">Отваряне</span><button id="openFile" type="button">Отвори от файл…</button><button id="addFile" type="button" hidden>Добави от файл</button><input id="addIn" type="file" accept=".kcut,.json,application/json,application/octet-stream,text/plain" hidden><input id="fileIn" type="file" accept=".kcut,.json,application/json,application/octet-stream,text/plain" hidden></div>
     </div>
     <div class="row-actions"><button id="filePanelClose" type="button" class="ghost keep">Затвори</button><button id="newProj" type="button" class="ghost keep">Нов празен разкрой</button><button id="restorePrev" type="button" class="ghost keep" hidden>Върни последната работа</button><button id="undoOpen" type="button" class="ghost keep" hidden>Върни предишното</button></div>
     <details class="list" id="textBox">
@@ -571,6 +572,15 @@ html { touch-action: manipulation; }
   <div class="startbox"><h2 id="dirtyT">Има незапазени промени</h2>
     <p class="hint" style="font-size:14px;line-height:1.55;margin:0">Ако продължиш, текущата работа ще бъде заменена и промените ще се изгубят.</p>
     <div class="row-actions"><button id="dirtySave" type="button" class="primary">Запази</button><button id="dirtyNo" type="button">Не запазвай</button><button id="dirtyCancel" type="button" class="ghost keep">Отказ</button></div>
+  </div>
+</div>
+
+<div id="addOv" class="startov" role="dialog" aria-modal="true" aria-labelledby="addT" hidden>
+  <div class="startbox"><h2 id="addT">Добави от файл</h2>
+    <p id="addSrc" class="hint" style="font-size:14px;line-height:1.5;margin:0"></p>
+    <div id="addList" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto"></div>
+    <p class="hint" style="font-size:12.5px;line-height:1.45;margin:0">Избраните детайли се добавят към отворения разкрой. Материал със същото име и размер се слива със съществуващия, иначе се създава нов. Подреждането на засегнатите материали се смята наново.</p>
+    <div class="row-actions"><button id="addGo" type="button" class="primary">Добави</button><button id="addCancel" type="button" class="ghost keep">Отказ</button></div>
   </div>
 </div>
 
@@ -3263,6 +3273,76 @@ html { touch-action: manipulation; }
     });
   }
 
+  // Добавяне на детайли от друг .kcut към отворения разкрой — по избор на материали.
+  function addFromText(text, label) {
+    var d = null, msg = $('#fileMsg');
+    try { d = JSON.parse(text); } catch (err) {}
+    var c = cleanProject(d);
+    if (!c) { msg.textContent = 'Това не е разкрой от тази програма или данните са повредени.'; return; }
+    var info = c.materials.map(function (m) {
+      var ps = c.parts.filter(function (p) { return p.mat === m.id && p.L && p.W; });
+      return { m: m, rows: ps.length, pcs: ps.reduce(function (a, p) { return a + p.q; }, 0) };
+    }).filter(function (x) { return x.rows > 0; });
+    if (!info.length) { msg.textContent = 'Във файла няма детайли за добавяне.'; return; }
+    var ov = $('#addOv'), list = $('#addList');
+    $('#addSrc').textContent = 'Файл: ' + (label || '') + (c.name ? ' („' + c.name + '“)' : '') + '. Отбележи кои материали да се добавят:';
+    list.innerHTML = '';
+    info.forEach(function (x, i) {
+      var l = document.createElement('label'); l.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.setAttribute('data-i', i);
+      var t = document.createElement('span'); t.innerHTML = '<b>' + esc(x.m.name) + '</b> <span class="hint">(' + fmt(x.m.L) + '×' + fmt(x.m.W) + ' мм) — ' + x.rows + ' реда, ' + x.pcs + ' бр.</span>';
+      l.appendChild(cb); l.appendChild(t); list.appendChild(l);
+    });
+    ov.hidden = false;
+    function close() { ov.hidden = true; $('#addGo').onclick = $('#addCancel').onclick = null; }
+    $('#addCancel').onclick = close;
+    $('#addGo').onclick = function () {
+      var chosen = [];
+      Array.prototype.forEach.call(list.querySelectorAll('input'), function (cb) { if (cb.checked) chosen.push(info[+cb.getAttribute('data-i')]); });
+      close();
+      if (!chosen.length) { msg.textContent = 'Не е избран материал. Нищо не е добавено.'; return; }
+      var rows = 0, pcs = 0, merged = [], created = [];
+      chosen.forEach(function (x) {
+        var key = String(x.m.name).trim().toLowerCase(), ex = null;
+        state.materials.forEach(function (q) { if (!ex && String(q.name).trim().toLowerCase() === key && +q.L === +x.m.L && +q.W === +x.m.W) ex = q; });
+        var id;
+        if (ex) { id = ex.id; merged.push(x.m.name); }
+        else {
+          var nm = { id: nid(), name: x.m.name, L: x.m.L, W: x.m.W, price: x.m.price, noGrain: !!x.m.noGrain };
+          state.materials.push(nm); id = nm.id; created.push(x.m.name);
+        }
+        c.parts.forEach(function (p) {
+          if (p.mat !== x.m.id || !p.L || !p.W) return;
+          var np = JSON.parse(JSON.stringify(p)); np.mat = id; state.parts.push(np); rows++; pcs += np.q;
+        });
+      });
+      save(); renderMats(); renderParts(); run(350);
+      msg.textContent = 'Добавени от „' + (label || 'файла') + '“: ' + rows + ' реда (' + pcs + ' бр.).' + (created.length ? ' Нови материали: ' + created.join(', ') + '.' : '') + (merged.length ? ' Слети със съществуващи: ' + merged.join(', ') + '.' : '') + ' Подреждането се смята наново — „Запази“, за да го запишеш.';
+    };
+  }
+  $('#addFile').addEventListener('click', async function () {
+    if (typeof window.showOpenFilePicker === 'function') {
+      var picked = false;
+      try {
+        var hs = await window.showOpenFilePicker({ types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'], 'application/json': ['.json'] } }] });
+        picked = true;
+        var rd; try { rd = await readHandle(hs[0]); } catch (er) { openFailed(hs[0].name, er); return; }
+        addFromText(rd.t, rd.f.name); return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        if (picked) { openFailed('файла', err); return; }
+      }
+    }
+    $('#addIn').click();
+  });
+  $('#addIn').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () { addFromText(String(rd.result), f.name); };
+    rd.onerror = function () { $('#fileMsg').textContent = 'Файлът не може да се прочете.'; };
+    rd.readAsText(f); e.target.value = '';
+  });
+
   // Плъзгане на файл .kcut от Explorer върху прозореца (работи и на стар Chrome, където двойният клик не подава файла).
   (function () {
     function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, 'Files') !== -1; }
@@ -3287,7 +3367,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '83';
+  var APP_VERSION = '84';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
