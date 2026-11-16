@@ -2044,13 +2044,42 @@ html { touch-action: manipulation; }
     var sf = 0; st.best.bins.forEach(function (b) { sf += b.used / (b.W * b.H); });
     return sf / st.lb < 0.975;
   }
-  function deepen(totalMs) {
+  // Сигнал при край на търсенето „Търси по-добро подреждане“: кратък звук, а ако прозорецът не се гледа — известие и надпис в заглавието.
+  var audioCtx = null, baseTitle = null;
+  function unlockSignal() {
+    try { var AC = window.AudioContext || window.webkitAudioContext; if (AC) { if (!audioCtx) audioCtx = new AC(); if (audioCtx.state === 'suspended') audioCtx.resume(); } } catch (e) {}
+    try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+  }
+  function beep() {
+    try {
+      if (!audioCtx) return;
+      [0, 0.22].forEach(function (d, i) {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime + d;
+        o.type = 'sine'; o.frequency.value = i ? 1175 : 880;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+        o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.22);
+      });
+    } catch (e) {}
+  }
+  function signalDone() {
+    beep();
+    try {
+      if (document.hidden) {
+        if (baseTitle === null) baseTitle = document.title;
+        document.title = '✓ Готово · ' + baseTitle;
+        var back = function () { if (!document.hidden) { document.title = baseTitle; baseTitle = null; document.removeEventListener('visibilitychange', back); } };
+        document.addEventListener('visibilitychange', back);
+        if (window.Notification && Notification.permission === 'granted') new Notification('KRAFTCUT', { body: 'Търсенето на по-добро подреждане приключи.' });
+      }
+    } catch (e) {}
+  }
+  function deepen(totalMs, notify) {
     var my = ++deepToken, t0 = performance.now(), prog = $('#prog'), lastWork = -1;
     startWorkers();
     function tick() {
       if (my !== deepToken) return;
       var lv = activeSolvers.filter(function (st) { return !st.frozen; });
-      if (!lv.length) { prog.textContent = ''; setDeepBusy(false); haltWorkers(); return; }
+      if (!lv.length) { prog.textContent = ''; setDeepBusy(false); haltWorkers(); if (notify) signalDone(); return; }
       var el0 = performance.now() - t0, imp = workerImp;
       workerImp = false;
       // След първите секунди се търси само там, където още може да се спести цял лист.
@@ -2067,7 +2096,7 @@ html { touch-action: manipulation; }
       var el = performance.now() - t0, close = lv.some(nearLB);
       var lim = close ? Math.max(totalMs, 40000) : totalMs;
       prog.textContent = 'Опитани подреждания: ' + fmt(totalTried()) + (workers.length ? ' · ядра: ' + (workers.length + 1) : '') + (el < lim ? (close && el >= totalMs ? ' · опитвам да спестя лист…' : ' · търся по-добро…') : ' · показано е най-доброто');
-      if (el < lim) setTimeout(tick, 0); else { setDeepBusy(false); haltWorkers(); }
+      if (el < lim) setTimeout(tick, 0); else { setDeepBusy(false); haltWorkers(); if (notify) signalDone(); }
     }
     setDeepBusy(true);
     setTimeout(tick, 30);
@@ -2239,7 +2268,7 @@ html { touch-action: manipulation; }
     showCuts = v; $('#showCuts').checked = v;
     $('#showCuts').addEventListener('change', function () { showCuts = this.checked; try { localStorage.setItem('razkroy-cuts', showCuts ? '1' : '0'); } catch (e) {} if (lastResult) render(lastResult); });
   })();
-  $('#deeper').addEventListener('click', function () { if (!deepBase) deepBase = shownMap(); activeSolvers.forEach(function (st) { st.frozen = false; }); deepen(effortMs()); });
+  $('#deeper').addEventListener('click', function () { if (!deepBase) deepBase = shownMap(); activeSolvers.forEach(function (st) { st.frozen = false; }); unlockSignal(); deepen(effortMs(), true); });
   $('#stopDeep').addEventListener('click', function () { deepToken++; setDeepBusy(false); haltWorkers(); $('#prog').textContent = 'Спряно · показано е най-доброто до момента (опитани: ' + fmt(totalTried()) + ')'; });
   (function () { var v = 'fast'; try { v = localStorage.getItem('razkroy-effort') || 'fast'; } catch (e) {} $('#effort').value = EFFORT_MS[v] ? v : 'fast';
     $('#effort').addEventListener('change', function () { try { localStorage.setItem('razkroy-effort', this.value); } catch (e) {} deepen(effortMs()); }); })();
@@ -3367,7 +3396,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '84';
+  var APP_VERSION = '85';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
