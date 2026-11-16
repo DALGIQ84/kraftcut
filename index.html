@@ -215,6 +215,8 @@ details.list td, details.list th { padding: 4px 8px; }
 .copybox { display: flex; flex-direction: column; gap: 8px; }
 .empty { color: var(--muted); padding: 22px 0; }
 .fsbtn { height: 30px; padding: 0 10px; font-size: 13px; }
+.lockbadge { font-size: 12px; font-weight: 600; color: #7a5a00; background: #fff1c2; border: 1px solid #e0b73a; border-radius: 10px; padding: 1px 8px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+article.sheet:has(.lockbadge) { border-color: #e0b73a; box-shadow: inset 4px 0 0 #e0b73a; }
 .fs { position: fixed; inset: 0; z-index: 50; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; gap: 8px;
   padding-top: max(8px, env(safe-area-inset-top, 0px)); padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
@@ -651,7 +653,8 @@ html { touch-action: manipulation; }
       s: { kerf: 4, trim: 10, trimSide: 'all', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
       materials: [],
       parts: [],
-      manual: {}
+      manual: {},
+      locked: {}
     };
   }
   var PREVKEY = 'razkroy-prev-v1', loadedBefore = load(), state = defaults();
@@ -1580,10 +1583,23 @@ html { touch-action: manipulation; }
     return (g.off || []).map(function (o) { return by[o.n]; }).filter(Boolean).sort(function (a, b) { return a.n - b.n; });
   }
 
+  var rebaseMat = {};
   function compute(budget) {
     var s = state.s, k = Math.max(0, +s.kerf || 0), trim = Math.max(0, +s.trim || 0), prio = s.prio || 'balance';
     var matById = {}; state.materials.forEach(function (m) { matById[m.id] = m; });
     var gset = {}, gorder = [], firstMat = state.materials[0], groups = {}, n = 0, edgeLen = 0, partCount = 0, edgeByMat = {};
+    // Заключени (вече срязани) листове: детайлите им се свалят от общия списък и листовете остават непроменени.
+    var LK = state.locked || {}, lockPool = {}, lockEnt = {}, lockNotes = [], pend = [];
+    function lkey(o) { return [o.name, +o.L, +o.W, (o.e || [0, 0, 0, 0]).join(''), o.gk || ''].join('|'); }
+    Object.keys(LK).forEach(function (mid) {
+      var m0 = matById[mid], lk = LK[mid];
+      if (!m0 || !lk || !lk.sheets || !lk.sheets.length) { delete LK[mid]; return; }
+      var tn0 = s.trimSide === 'two' ? 1 : 2, W0 = +m0.L - tn0 * trim, H0 = +m0.W - tn0 * trim;
+      if (lk.sig !== JSON.stringify([W0, H0, k, s.mode, trim > 0 ? tn0 : 0])) { delete LK[mid]; lockNotes.push('Заключените листове на „' + esc(m0.name) + '“ са отключени, защото размерът на листа или настройките за рязане са променени.'); save(); return; }
+      lockPool[mid] = {}; lockEnt[mid] = lk.sheets.map(function (sh, si) {
+        return sh.map(function (it, ii) { var en = { si: si, ii: ii, it: it, piece: null }; (lockPool[mid][lkey(it)] = lockPool[mid][lkey(it)] || []).push(en); return en; });
+      });
+    });
     state.parts.forEach(function (p, pi) {
       var L = +p.L, Wd = +p.W, q = Math.floor(+p.q || 0);
       if (!(L > 0 && Wd > 0) || q < 1) return;
@@ -1597,9 +1613,21 @@ html { touch-action: manipulation; }
         edgeLen += el; edgeByMat[mid] = (edgeByMat[mid] || 0) + el;
         var tgt = groups[mid] = groups[mid] || [];
         if (gk) { tgt = gset[mid + '|' + gk]; if (!tgt) { tgt = gset[mid + '|' + gk] = []; gorder.push({ mid: mid, gk: gk, list: tgt }); } }
-        tgt.push({ n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: (pi * 53 + 190) % 360 });
+        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: (pi * 53 + 190) % 360 };
+        pend.push({ pc: pc, tgt: tgt, mid: mid, key: lkey({ name: pc.name, L: L, W: Wd, e: e, gk: gk }) });
       }
       partCount += q;
+    });
+    // Свързване на детайлите със заключените листове: първо по същия номер (точно същият детайл), после по име, размер и кант.
+    pend.forEach(function (o) {
+      var pool = lockPool[o.mid], arr = pool && pool[o.key]; if (!arr) return;
+      for (var i = 0; i < arr.length; i++) if (!arr[i].piece && arr[i].it.n === o.pc.n) { arr[i].piece = o.pc; o.used = true; break; }
+    });
+    pend.forEach(function (o) {
+      if (o.used) return;
+      var pool = lockPool[o.mid], arr = pool && pool[o.key];
+      if (arr) for (var i = 0; i < arr.length; i++) if (!arr[i].piece) { arr[i].piece = o.pc; o.used = true; break; }
+      if (!o.used) o.tgt.push(o.pc);
     });
     // Групите (чела с продължение на шарката) се слагат на листа като един блок: детайлите един под друг, без въртене.
     gorder.forEach(function (g) {
@@ -1627,8 +1655,8 @@ html { touch-action: manipulation; }
     var res = [], totalSheets = 0, usedArea = 0, boardArea = 0, cost = 0, anyPrice = false, totalCut = 0, notes = [];
     activeSolvers = [];
     state.materials.forEach(function (m) {
-      var list = groups[m.id];
-      if (!list) return;
+      var list = groups[m.id], lkm = LK[m.id] || null;
+      if (!list) { if (!lkm) return; list = []; }
       var ML = +m.L, MW = +m.W;
       var tn = s.trimSide === 'two' ? 1 : 2, W = ML - tn * trim, H = MW - tn * trim, fit = [], bad = [];
       list.forEach(function (p) {
@@ -1640,6 +1668,12 @@ html { touch-action: manipulation; }
         var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0]);
         sigH = sigHash(sig);
         var man = state.manual && state.manual[m.id];
+        if (man && rebaseMat[m.id] && man.h !== sigH) {
+          var have = {}; fit.forEach(function (q) { if (q.comp) q.comp.forEach(function (x) { have[x.n] = 1; }); else have[q.n] = 1; });
+          man.sheets = (man.sheets || []).map(function (sh) { return (sh || []).filter(function (o) { return have[o.n]; }); }).filter(function (sh) { return sh.length; });
+          man.off = (man.off || []).filter(function (o) { return have[o.n]; });
+          man.h = sigH;
+        }
         if (man) {
           var mb = man.h === sigH ? buildManual(man, fit, W, H, k, s.mode, trim > 0 ? tn : 0) : null;
           if (mb) { bins = mb; manualOn = true; }
@@ -1664,13 +1698,29 @@ html { touch-action: manipulation; }
         bins = bins.map(function (b, i) { return { b: b, i: i }; }).sort(function (p, q) { return (q.b.used - p.b.used) || (p.i - q.i); }).map(function (x) { return x.b; });
         algo = fin ? fin.cfg.algo : '';
       }
+      var nLocked = 0, lockedItems = 0;
+      if (lkm && W > 0 && H > 0) {
+        var gone = 0, lb = [];
+        lockEnt[m.id].forEach(function (sheet, si) {
+          var gmapL = {}, gids = {}, listL = [];
+          sheet.forEach(function (en) {
+            var it = en.it, pp = en.piece;
+            if (!pp) { gone++; pp = { n: 900000 + si * 1000 + en.ii, grp: it.gk || '', name: it.name, w: it.L, h: it.W, L: it.L, W: it.W, rot: !!it.r, e: it.e, hue: it.hue, gone: true }; }
+            if (it.gk) { if (!gids[it.gk]) gids[it.gk] = Object.keys(gids).length + 1; gmapL[pp.n] = gids[it.gk]; }
+            listL.push({ p: pp, x: it.x, y: it.y, r: !!it.r });
+          });
+          var bl = placedBin(listL, W, H, k, s.mode, trim > 0 ? tn : 0, gmapL); bl.locked = true; lb.push(bl); lockedItems += listL.length;
+        });
+        bins = lb.concat(bins); nLocked = lb.length;
+        if (gone) lockNotes.push('На заключените листове на „' + esc(m.name) + '“ има ' + gone + ' детайла, които вече не са в списъка или са с променен размер. Те са вече срязани и остават на листа.');
+      }
       var matUsed = 0, matCut = 0;
       bins.forEach(function (b) { matUsed += b.used; matCut += b.cutLen || 0; });
       totalSheets += bins.length; usedArea += matUsed; boardArea += bins.length * ML * MW; totalCut += matCut;
       if (+m.price > 0) { anyPrice = true; cost += bins.length * +m.price; }
-      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0), cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn, off: manualOn ? (bins.off || []) : [] });
+      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0) + lockedItems, nLocked: nLocked, cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn, off: manualOn ? (bins.off || []) : [] });
     });
-    return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut, notes: notes };
+    return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut, notes: notes.concat(lockNotes) };
   }
 
   /* ---------- Чертеж ---------- */
@@ -1856,7 +1906,7 @@ html { touch-action: manipulation; }
       h += '<div class="sheetgrid' + (g.bins.length > 1 ? '' : '') + '">';
       g.bins.forEach(function (b, bi) {
         var oc = offcut(b), area = (+g.m.L) * (+g.m.W);
-        h += '<article class="sheet"><div class="sheet-top"><span class="t">Лист ' + (bi + 1) + ' от ' + g.bins.length + '</span><button type="button" class="fsbtn" data-fs="' + gi + '-' + bi + '">На цял екран</button>' + (g.sigH ? '<button type="button" class="fsbtn" data-ed="' + gi + '-' + bi + '">Редактирай</button>' : '');
+        h += '<article class="sheet"><div class="sheet-top"><span class="t">Лист ' + (bi + 1) + ' от ' + g.bins.length + (b.locked ? ' <span class="lockbadge">🔒 срязан</span>' : '') + '</span><button type="button" class="fsbtn" data-fs="' + gi + '-' + bi + '">На цял екран</button>' + (g.sigH && !g.nLocked ? '<button type="button" class="fsbtn" data-ed="' + gi + '-' + bi + '">Редактирай</button>' : '') + (g.sigH || b.locked ? '<button type="button" class="fsbtn" data-lock="' + gi + '-' + bi + '" title="' + (b.locked ? 'Листът пак ще се подрежда заедно с останалите' : 'Листът е срязан: остава точно такъв, а при промени се преизчислява само останалото') + '">' + (b.locked ? 'Отключи' : 'Заключи (срязан)') + '</button>' : '');
         h += '<span class="m mono">използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м' + (oc ? ' · остатък ≈ ' + fmt(oc.w) + '×' + fmt(oc.h) : '') + (r.mode === 'saw' && !b.noGuil ? ' · <span class="tn" title="Колко пъти се сменя посоката на срезовете по реда на рязане, т.е. колко пъти се обръща листът или лентата">завъртания ' + turnsOf(b) + '</span>' : '') + (b.noGuil ? ' · <b class="noguil">⚠ не се реже с трион</b>' : '') + '</span></div>';
         h += sheetSVG(b, g);
         h += '<details class="list"><summary>Опис на детайлите (' + b.items.length + ')</summary><div class="tablebox"><table><thead><tr><th>№</th><th>Име</th><th>Дължина</th><th>Ширина</th><th>Позиция</th><th>Кант</th></tr></thead><tbody>';
@@ -2355,7 +2405,29 @@ html { touch-action: manipulation; }
     try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {}); } catch (err) {}
     fsReal = false;
   }
+  function toggleLock(gi, bi) {
+    var g = lastResult && lastResult.res[gi]; if (!g) return;
+    var b = g.bins[bi]; if (!b) return;
+    var mid = g.m.id; state.locked = state.locked || {};
+    var msg = $('#fileMsg');
+    if (b.locked) {
+      var lk = state.locked[mid]; if (!lk) return;
+      lk.sheets.splice(bi, 1);
+      if (!lk.sheets.length) delete state.locked[mid];
+      msg.textContent = 'Листът е отключен и пак се подрежда заедно с останалите.';
+    } else {
+      var items = b.items.map(function (it) { return { name: it.p.name, L: it.p.L, W: it.p.W, e: it.p.e || [0, 0, 0, 0], gk: it.p.grp || '', x: it.x, y: it.y, r: !!it.r, hue: it.p.hue, n: it.p.n }; });
+      if (!items.length) return;
+      var lk2 = state.locked[mid] || (state.locked[mid] = { sig: JSON.stringify([g.W, g.H, g.k, state.s.mode, g.trim > 0 ? g.tn : 0]), sheets: [] });
+      lk2.sheets.push(items);
+      if (g.manual) rebaseMat[mid] = true;
+      msg.textContent = 'Листът е заключен като срязан. При промени в детайлите той остава същият, а се преизчислява само останалото.';
+    }
+    save(); try { run(350); } finally { rebaseMat = {}; }
+  }
   $('#out').addEventListener('click', function (e) {
+    var lb = e.target.closest('button[data-lock]');
+    if (lb) { var lp = lb.dataset.lock.split('-'); toggleLock(+lp[0], +lp[1]); return; }
     var b = e.target.closest('button[data-fs]');
     if (!b) return;
     var p = b.dataset.fs.split('-'); fsOpen(+p[0], +p[1]);
@@ -2923,7 +2995,7 @@ html { touch-action: manipulation; }
 
   /* ---------- Незапазени промени ---------- */
   var cleanSig = '';
-  function coreSig() { return JSON.stringify([state.name || '', state.s, state.materials, state.parts, state.manual || {}]); }
+  function coreSig() { return JSON.stringify([state.name || '', state.s, state.materials, state.parts, state.manual || {}, state.locked || {}]); }
   // Ново подреждане (бутон „Търси по-добро подреждане“) също е промяна — подреждането се записва във файла.
   var deepBase = null;
   function shownMap() { var m = {}; activeSolvers.forEach(function (st) { if (st.matId) m[st.matId] = shown(st) || null; }); return m; }
@@ -2965,7 +3037,7 @@ html { touch-action: manipulation; }
   var prevState = null;
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
   function exportData() {
-    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS, manual: state.manual || {}, layout: { v: 1, m: layoutPack() } };
+    return { app: 'razkroy', v: 1, saved: new Date().toISOString(), name: state.name || '', s: state.s, materials: state.materials, parts: state.parts, presets: PRESETS, manual: state.manual || {}, locked: state.locked || {}, layout: { v: 1, m: layoutPack() } };
   }
   function fileName() {
     var n = String(state.name || 'Разкрой').trim().replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 60) || 'Разкрой', d = new Date();
@@ -2992,8 +3064,19 @@ html { touch-action: manipulation; }
       var v = d.manual[ok];
       if (v && typeof v.h === 'string' && Array.isArray(v.sheets)) man[byOld[ok] || ok] = { h: v.h, sheets: v.sheets.map(function (sh) { return (Array.isArray(sh) ? sh : []).map(function (o) { return { n: +o.n, x: +o.x, y: +o.y, r: !!o.r }; }); }), off: (Array.isArray(v.off) ? v.off : []).map(function (o) { return { n: +o.n, x: +o.x || 0, y: +o.y || 0, r: !!o.r }; }) };
     });
+    var lk = {};
+    if (d.locked && typeof d.locked === 'object') Object.keys(d.locked).forEach(function (ok) {
+      var v = d.locked[ok], id = byOld[ok]; if (!id || !v || typeof v.sig !== 'string' || !Array.isArray(v.sheets)) return;
+      var shs = v.sheets.map(function (sh) {
+        return (Array.isArray(sh) ? sh : []).map(function (o) {
+          var e = Array.isArray(o.e) ? o.e : [0, 0, 0, 0];
+          return { name: String(o.name || 'Детайл'), L: +o.L, W: +o.W, e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0], gk: String(o.gk || ''), x: +o.x, y: +o.y, r: !!o.r, hue: isNaN(+o.hue) ? 200 : +o.hue, n: +o.n || 0 };
+        }).filter(function (o) { return o.L > 0 && o.W > 0 && isFinite(o.x) && isFinite(o.y); });
+      }).filter(function (sh) { return sh.length; });
+      if (shs.length) lk[id] = { sig: v.sig, sheets: shs };
+    });
     var s = d.s || {};
-    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, idMap: byOld };
+    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, locked: lk, idMap: byOld };
   }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
@@ -3397,7 +3480,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '86';
+  var APP_VERSION = '87';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
