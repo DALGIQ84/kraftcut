@@ -3078,6 +3078,34 @@ html { touch-action: manipulation; }
     document.getElementById('saveErrX').onclick = function () { b.remove(); };
     document.getElementById('saveErrCopy').onclick = function () { b.remove(); saveDownload(txt); };
   }
+  // Четене на файл от дръжка: до 3 опита (мрежови дискове и синхронизация понякога го заключват за миг).
+  async function readHandle(h) {
+    var delays = [0, 600, 1800], last = null;
+    for (var i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise(function (r) { setTimeout(r, delays[i]); });
+      try {
+        var f = await h.getFile(), t = await f.text();
+        if (!t.length) { var em = new Error('файлът е празен (0 байта)'); em.name = 'EmptyFile'; throw em; }
+        return { f: f, t: t };
+      } catch (e) { last = e; if (e && e.name === 'EmptyFile' && i === delays.length - 1) throw e; }
+    }
+    throw last;
+  }
+  function openFailed(name, er) {
+    var info = ((er && er.name) || 'грешка') + (er && er.message ? ': ' + er.message : '');
+    var empty = er && er.name === 'EmptyFile';
+    var b = document.getElementById('saveErr');
+    if (!b) {
+      b = document.createElement('div'); b.id = 'saveErr';
+      b.style.cssText = 'position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:9999;width:min(660px,94vw);box-sizing:border-box;background:#fff;color:#222;border:2px solid #C0392B;border-radius:10px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.28);font:inherit';
+      document.body.appendChild(b);
+    }
+    b.innerHTML = '<div style="font-weight:700;color:#C0392B;margin-bottom:6px">⚠ Не мога да отворя „' + esc(name || 'файла') + '“</div>' +
+      '<div style="margin-bottom:6px">' + (empty ? 'Файлът е празен (0 байта) — при записването му данните не са стигнали до диска. Този файл не може да се възстанови от програмата.' : 'Файлът не може да се прочете. Провери дали е наличен (мрежов диск, синхронизация) и дали не е отворен от друга програма.') + '</div>' +
+      '<div style="font-size:12px;color:#666;margin-bottom:10px;word-break:break-word">Грешка: ' + esc(info) + '</div>' +
+      '<button type="button" id="saveErrX" class="mbtn">Затвори</button>';
+    document.getElementById('saveErrX').onclick = function () { b.remove(); };
+  }
   async function saveWithPicker(txt, forcePick) {
     var msg = $('#fileMsg');
     if (fileHandle && !forcePick) {
@@ -3180,14 +3208,18 @@ html { touch-action: manipulation; }
       if (loadText(r.text, r.name)) { appPath = r.path; fileHandle = null; $('#saveAs').hidden = false; } showFileTag(); return;
     }
     if (typeof window.showOpenFilePicker === 'function') {
+      var picked = false;
       try {
         var hs = await window.showOpenFilePicker({ types: [{ description: 'Разкрой KRAFTCUT', accept: { 'application/x-kraftcut': ['.kcut'], 'application/json': ['.json'] } }] });
-        var f = await hs[0].getFile();
-        if (loadText(await f.text(), f.name)) { fileHandle = typeof hs[0].createWritable === 'function' ? hs[0] : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
+        picked = true;
+        var rdd; try { rdd = await readHandle(hs[0]); } catch (er) { openFailed(hs[0].name, er); return; }
+        var f = rdd.f;
+        if (loadText(rdd.t, f.name)) { fileHandle = typeof hs[0].createWritable === 'function' ? hs[0] : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
         showFileTag();
         return;
       } catch (err) {
         if (err && err.name === 'AbortError') return;
+        if (picked) { openFailed('файла', err); return; }
       }
     }
     $('#fileIn').click();
@@ -3207,16 +3239,17 @@ html { touch-action: manipulation; }
     window.launchQueue.setConsumer(async function (lp) {
       if (!lp || !lp.files || !lp.files.length) return;
       try {
-        var h = lp.files[0], f = await h.getFile();
-        launched = true; if (startClose) startClose();
-        if (loadText(await f.text(), f.name)) { fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
+        var h = lp.files[0], rd2; launched = true; if (startClose) startClose();
+        try { rd2 = await readHandle(h); } catch (er) { openFailed(h.name, er); return; }
+        var f = rd2.f;
+        if (loadText(rd2.t, f.name)) { fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
         showFileTag();
       } catch (err) { $('#fileMsg').textContent = 'Файлът не може да се отвори.'; }
     });
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '80';
+  var APP_VERSION = '81';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
