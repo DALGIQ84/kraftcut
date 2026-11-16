@@ -3263,8 +3263,31 @@ html { touch-action: manipulation; }
     });
   }
 
+  // Плъзгане на файл .kcut от Explorer върху прозореца (работи и на стар Chrome, където двойният клик не подава файла).
+  (function () {
+    function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, 'Files') !== -1; }
+    window.addEventListener('dragover', function (e) { if (hasFiles(e)) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} } });
+    window.addEventListener('drop', async function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      var it = e.dataTransfer.items && e.dataTransfer.items[0], file = e.dataTransfer.files && e.dataTransfer.files[0], h = null;
+      try { if (it && typeof it.getAsFileSystemHandle === 'function') { h = await it.getAsFileSystemHandle(); if (h && h.kind !== 'file') h = null; } } catch (x) { h = null; }
+      if (startClose) startClose();
+      if (h) {
+        var rd3; try { rd3 = await readHandle(h); } catch (er) { openFailed(h.name, er); return; }
+        if (loadText(rd3.t, rd3.f.name)) { fileHandle = typeof h.createWritable === 'function' ? h : null; if (fileHandle) $('#saveAs').hidden = false; appPath = null; softName = null; }
+        showFileTag(); return;
+      }
+      if (!file) return;
+      var rd = new FileReader();
+      rd.onload = function () { if (loadText(String(rd.result), file.name)) { fileHandle = null; appPath = null; softName = file.name; } showFileTag(); };
+      rd.onerror = function () { $('#fileMsg').textContent = 'Файлът не може да се прочете.'; };
+      rd.readAsText(file);
+    });
+  })();
+
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '82';
+  var APP_VERSION = '83';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
