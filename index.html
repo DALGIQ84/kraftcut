@@ -3235,8 +3235,23 @@ html { touch-action: manipulation; }
   });
   // Отваряне с двоен клик върху файл .kcut (когато програмата е инсталирана от Chrome/Edge).
   var startClose = null, launched = false;
+  // Временна диагностика само за стар Chrome (≤110) в инсталирана програма: показва какво получава при двоен клик.
+  var diag = { lq: ('launchQueue' in window && !!window.launchQueue), called: false, files: null, target: '' };
+  function diagShow() {
+    try {
+      var m = /Chrome\/(\d+)/.exec(navigator.userAgent), cv = m ? +m[1] : 999;
+      var sa = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      if (!(cv <= 110 && sa)) return;
+      var b = document.getElementById('diagBox');
+      if (!b) { b = document.createElement('div'); b.id = 'diagBox'; b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#fff8c4;border:2px solid #b58900;border-radius:6px;padding:8px 28px 8px 10px;font:13px/1.4 Arial,sans-serif;color:#000;max-width:90vw;word-break:break-all'; var x = document.createElement('span'); x.textContent = '×'; x.style.cssText = 'position:absolute;right:8px;top:2px;cursor:pointer;font-size:18px'; x.onclick = function () { b.remove(); }; b.appendChild(x); b.appendChild(document.createElement('div')); document.body.appendChild(b); }
+      b.lastChild.textContent = 'Диагностика: Chrome ' + cv + ' · launchQueue=' + (diag.lq ? 'да' : 'НЕ') + ' · извикано=' + (diag.called ? 'да' : 'не') + ' · файлове=' + diag.files + ' · адрес=' + location.pathname + location.search + (diag.target ? ' · цел=' + diag.target : '');
+    } catch (e) {}
+  }
+  setTimeout(diagShow, 1500);
   if ('launchQueue' in window && window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
     window.launchQueue.setConsumer(async function (lp) {
+      diag.called = true; diag.files = (lp && lp.files) ? lp.files.length : -1; diag.target = (lp && lp.targetURL) ? String(lp.targetURL) : '';
+      diagShow();
       if (!lp || !lp.files || !lp.files.length) return;
       try {
         var h = lp.files[0], rd2; launched = true; if (startClose) startClose();
@@ -3249,7 +3264,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '81';
+  var APP_VERSION = '82';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
