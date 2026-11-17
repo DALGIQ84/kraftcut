@@ -2331,7 +2331,7 @@ html { touch-action: manipulation; }
     return isNaN(v) ? 1 : (v > 0 ? 1 : 0);
   }
   $('#doPaste').addEventListener('click', function () {
-    var txt = $('#pasteArea').value, added = 0, created = [];
+    var txt = $('#pasteArea').value, added = 0, created = [], sized = {};
     txt.split(/\r?\n/).forEach(function (line) {
       if (!line.trim()) return;
       var sep = line.indexOf('\t') >= 0 ? '\t' : line.indexOf(';') >= 0 ? ';' : ',';
@@ -2341,7 +2341,9 @@ html { touch-action: manipulation; }
       if (isNaN(nums[0]) || !/^[\d\s.,]+$/.test(c[0])) { name = c[0] || 'Детайл'; off = 1; }
       var L = nums[off], W = nums[off + 1], q = nums[off + 2];
       if (!(L > 0 && W > 0)) return;
-      var tail = c.slice(off + 3), e = [0, 0, 0, 0], rotTxt = '', mnameRaw = '', grpTxt = '', rowNoTxt = '';
+      var tail = c.slice(off + 3), e = [0, 0, 0, 0], rotTxt = '', mnameRaw = '', grpTxt = '', rowNoTxt = '', sheet = null;
+      // размер на плочата от KRAFTPLAN (напр. „2800×2070“) — маха се от реда и се слага на материала
+      tail = tail.filter(function (t) { var m = /^(\d{3,4})\s*[x×хX]\s*(\d{3,4})$/.exec(t); if (m) { sheet = [+m[1], +m[2]]; return false; } return true; });
       var flagRe = /^(|0|1|2|x|х|да|не|yes|no|y|n|-|\+|\d+([.,]\d+)?)$/i;
       if (tail.length >= 4 && tail.slice(0, 4).every(function (t) { return flagRe.test(t); })) {
         e = tail.slice(0, 4).map(edgeOn); mnameRaw = tail[4] || ''; rotTxt = tail[5] || ''; grpTxt = tail[6] || ''; rowNoTxt = tail[7] || '';
@@ -2352,15 +2354,16 @@ html { touch-action: manipulation; }
         var key = mname.toLowerCase(), found = null;
         state.materials.forEach(function (m) { if (!found && m.name.trim().toLowerCase() === key) found = m; });
         if (!found) state.materials.forEach(function (m) { var mk = m.name.trim().toLowerCase(); if (!found && mk && (mk.indexOf(key) >= 0 || key.indexOf(mk) >= 0)) found = m; });
-        if (!found) { found = { id: nid(), name: mname, L: 2800, W: 2070, price: '' }; state.materials.push(found); created.push(mname); }
+        if (!found) { found = { id: nid(), name: mname, L: sheet ? sheet[0] : 2800, W: sheet ? sheet[1] : 2070, price: '' }; state.materials.push(found); if (!sheet) created.push(mname); else sized[mname] = sheet[0] + '×' + sheet[1]; }
         mat = found;
       }
+      if (sheet && mat && (mat.L !== sheet[0] || mat.W !== sheet[1])) { mat.L = sheet[0]; mat.W = sheet[1]; sized[mat.name] = sheet[0] + '×' + sheet[1]; }
       var dir = /върт|free|rot/i.test(rotTxt) ? 'rot' : /шарк|fix|grain/i.test(rotTxt) ? 'fix' : 'auto';
       state.parts.push({ name: name, L: L, W: W, q: q > 0 ? Math.floor(q) : 1, mat: mat.id, dir: dir, grp: grpTxt.slice(0, 10), row: (parseInt(rowNoTxt, 10) >= 1 && parseInt(rowNoTxt, 10) <= 8) ? String(parseInt(rowNoTxt, 10)) : '', e: e });
       added++;
     });
     $('#pasteMsg').textContent = added
-      ? 'Добавени редове: ' + added + '.' + (created.length ? ' Нов материал с размер 2800×2070 мм: ' + created.join(', ') + '. Провери размера в таблицата с материали.' : '')
+      ? 'Добавени редове: ' + added + '.' + (Object.keys(sized).length ? ' Размер на плочата от KRAFTPLAN: ' + Object.keys(sized).map(function (k) { return k + ' ' + sized[k]; }).join(', ') + '.' : '') + (created.length ? ' Нов материал с размер 2800×2070 мм: ' + created.join(', ') + '. Провери размера в таблицата с материали.' : '')
       : 'Не открих редове във формат име, дължина, ширина, брой, материал.';
     if (added) { $('#pasteArea').value = ''; renderMats(); renderParts(); run(350); }
   });
@@ -3480,7 +3483,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '87';
+  var APP_VERSION = '88';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
