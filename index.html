@@ -201,6 +201,10 @@ svg .grpbox { fill: none; stroke: var(--accent-text); stroke-width: 2.5; stroke-
 svg .rest { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; }
 svg .rt { fill: var(--muted); font-family: var(--font-mono); font-weight: 600; }
 svg .td { font-family: var(--font-mono); font-weight: 600; }
+svg .tc { font-family: var(--font-body); font-weight: 600; font-style: italic; }
+.pnote { color: var(--accent-text); font-style: italic; }
+.tip .tnote { color: #F2B11F; }
+#partsTable td input[data-f="note"] { min-width: 130px; }
 details.list summary { cursor: pointer; color: var(--accent-text); font-weight: 500; }
 details.list table { margin-top: 8px; font-size: 13px; }
 details.list td, details.list th { padding: 4px 8px; }
@@ -345,6 +349,7 @@ html { touch-action: manipulation; }
   #partsTable td:nth-child(8) { grid-column: span 4; }
   #partsTable td.c { grid-column: span 2; text-align: center; }
   #partsTable td.c input { margin: 4px auto 0; }
+  #partsTable td:nth-child(13) { grid-column: span 12; }
   #partsTable td:last-child { grid-column: span 12; text-align: right; }
   #matTable td:nth-child(1) { grid-column: span 12; }
   #matTable td:nth-child(2), #matTable td:nth-child(3), #matTable td:nth-child(4) { grid-column: span 4; }
@@ -520,7 +525,7 @@ html { touch-action: manipulation; }
     <div class="panel-head"><h2 id="hParts">Детайли</h2><span class="hint">Кант: Д1 и Д2 са двете дълги страни, Ш1 и Ш2 двете къси. Примерните детайли са за шкаф, замени ги със своите.</span></div>
     <div class="tablebox"><table id="partsTable"><thead><tr>
       <th>Тип детайл</th><th>Дължина</th><th>Ширина</th><th>Бр.</th><th>Материал</th><th title="Според материала: следва настройката Шарка на материала. По шарката: детайлът не се върти. Може да се върти: детайлът се слага и на 90°.">Посока</th><th title="Група за продължение на шарката, напр. чела на шкаф: избери една и съща буква на всички детайли, които стоят заедно на шкафа. В един материал те се режат като един блок от една и съща ивица на листа и никога не се въртят. Бройките се разгъват една след друга: 145 × 2 и 225 × 2 стават 145, 145, 225, 225 в един блок. За втори шкаф ползвай друга буква.">Група</th><th title="Къде стои детайлът в групата, отгоре надолу. Детайли със същия ред са един до друг (отляво надясно, в реда от таблицата), а следващият ред е отдолу. „авто“ = в същия ред като предишния, затова без избор всички детайли от групата са в една линия. Пример за 2×2: двете горни са ред 1, двете долни са ред 2.">Ред в групата</th>
-      <th class="c">Д1</th><th class="c">Д2</th><th class="c">Ш1</th><th class="c">Ш2</th><th></th>
+      <th class="c">Д1</th><th class="c">Д2</th><th class="c">Ш1</th><th class="c">Ш2</th><th title="Бележка към детайла, напр. цвят на канта, ако е различен от плочата. Показва се в описа, в печата и при посочване на детайла.">Коментар</th><th></th>
     </tr></thead><tbody id="partBody"></tbody></table></div>
     <div class="row-actions">
       <button id="addPart" type="button">Добави детайл</button>
@@ -1613,7 +1618,7 @@ html { touch-action: manipulation; }
         edgeLen += el; edgeByMat[mid] = (edgeByMat[mid] || 0) + el;
         var tgt = groups[mid] = groups[mid] || [];
         if (gk) { tgt = gset[mid + '|' + gk]; if (!tgt) { tgt = gset[mid + '|' + gk] = []; gorder.push({ mid: mid, gk: gk, list: tgt }); } }
-        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: (pi * 53 + 190) % 360 };
+        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', note: String(p.note || '').trim(), w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: (pi * 53 + 190) % 360 };
         pend.push({ pc: pc, tgt: tgt, mid: mid, key: lkey({ name: pc.name, L: L, W: Wd, e: e, gk: gk }) });
       }
       partCount += q;
@@ -1705,7 +1710,7 @@ html { touch-action: manipulation; }
           var gmapL = {}, gids = {}, listL = [];
           sheet.forEach(function (en) {
             var it = en.it, pp = en.piece;
-            if (!pp) { gone++; pp = { n: 900000 + si * 1000 + en.ii, grp: it.gk || '', name: it.name, w: it.L, h: it.W, L: it.L, W: it.W, rot: !!it.r, e: it.e, hue: it.hue, gone: true }; }
+            if (!pp) { gone++; pp = { n: 900000 + si * 1000 + en.ii, grp: it.gk || '', name: it.name, note: it.note || '', w: it.L, h: it.W, L: it.L, W: it.W, rot: !!it.r, e: it.e, hue: it.hue, gone: true }; }
             if (it.gk) { if (!gids[it.gk]) gids[it.gk] = Object.keys(gids).length + 1; gmapL[pp.n] = gids[it.gk]; }
             listL.push({ p: pp, x: it.x, y: it.y, r: !!it.r });
           });
@@ -1755,6 +1760,14 @@ html { touch-action: manipulation; }
       if (name) {
         var cx = x + w / 2, cy = y + h / 2, rot = w < h ? ' rotate(-90)' : '';
         o += '<text class="tn" transform="translate(' + cx.toFixed(1) + ' ' + (cy + fn * 0.35).toFixed(1) + ')' + rot + '" font-size="' + fn.toFixed(1) + '"' + (w < h ? ' dx="0"' : '') + '>' + esc(name) + '</text>';
+        var nt = String(p.note || '').trim();
+        if (nt) {
+          var fc = Math.min(Math.max(fn * 0.85, 14), 26);
+          if (fc >= 11 && avail >= fn + fc * 1.9) {
+            var mc = Math.floor(room / (fc * 0.55));
+            if (mc >= 5) o += '<text class="tc" transform="translate(' + cx.toFixed(1) + ' ' + (cy + fn * 0.35).toFixed(1) + ')' + rot + '" y="' + (fc * 1.35).toFixed(1) + '" font-size="' + fc.toFixed(1) + '">' + esc(nt.length > mc ? nt.slice(0, mc - 1).trim() + '…' : nt) + '</text>';
+          }
+        }
       }
     }
     o += '<text class="td" x="' + (x + w / 2).toFixed(1) + '" y="' + (y + pad + fd * 0.82).toFixed(1) + '" font-size="' + fd.toFixed(1) + '">' + hv + '</text>';
@@ -1764,7 +1777,7 @@ html { touch-action: manipulation; }
   // Текст за балончето при посочване на детайл: № | име | размер | кант | завъртян
   function tipText(it) {
     var e = it.p.e || [0, 0, 0, 0], ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
-    return [it.p.n, String(it.p.name || 'Детайл'), fmt(it.p.L) + '×' + fmt(it.p.W) + ' мм', ed || 'без кант', it.r ? 'завъртян' : ''].map(function (x) { return encodeURIComponent(String(x)); }).join('|');
+    return [it.p.n, String(it.p.name || 'Детайл'), fmt(it.p.L) + '×' + fmt(it.p.W) + ' мм', ed || 'без кант', it.r ? 'завъртян' : '', it.p.note || ''].map(function (x) { return encodeURIComponent(String(x)); }).join('|');
   }
   function pieceLabel(it, x, y, ip) {
     var side = sideLabels(it, x, y, ip);
@@ -1786,6 +1799,11 @@ html { touch-action: manipulation; }
     var cx = x + w / 2, cy = y + h / 2, rot = w < h ? ' rotate(-90)' : '';
     var o = '<g transform="translate(' + cx + ' ' + cy + ')' + rot + '"><text class="tn" y="' + ny.toFixed(1) + '" font-size="' + fn.toFixed(1) + '">' + esc(name) + '</text>';
     if (showD) o += '<text class="td" y="' + dy.toFixed(1) + '" font-size="' + fd.toFixed(1) + '">' + dims + '</text>';
+    var nt = String(it.p.note || '').trim();
+    if (nt && showD && lo >= 120) {
+      var fc = Math.min(fd * 0.95, 24), mc = Math.floor(room / (fc * 0.55));
+      if (mc >= 5) o += '<text class="tc" y="' + (dy + fc * 1.25).toFixed(1) + '" font-size="' + fc.toFixed(1) + '">' + esc(nt.length > mc ? nt.slice(0, mc - 1).trim() + '…' : nt) + '</text>';
+    }
     return o + '</g>';
   }
   function offcut(bin, ML, MW) {
@@ -1912,7 +1930,7 @@ html { touch-action: manipulation; }
         h += '<details class="list"><summary>Опис на детайлите (' + b.items.length + ')</summary><div class="tablebox"><table><thead><tr><th>№</th><th>Име</th><th>Дължина</th><th>Ширина</th><th>Позиция</th><th>Кант</th></tr></thead><tbody>';
         b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; }).forEach(function (it) {
           var e = it.p.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
-          h += '<tr><td class="mono">' + it.p.n + '</td><td>' + esc(it.p.name) + (it.p.grp ? ' <span class="hint">· група ' + esc(it.p.grp) + '</span>' : '') + '</td><td class="mono">' + fmt(it.p.L) + '</td><td class="mono">' + fmt(it.p.W) + '</td><td class="mono">x ' + fmt(g.trim + it.x) + ', y ' + fmt(g.trim + it.y) + (it.r ? ' · завъртян' : '') + '</td><td>' + (ed || '–') + '</td></tr>';
+          h += '<tr><td class="mono">' + it.p.n + '</td><td>' + esc(it.p.name) + (it.p.grp ? ' <span class="hint">· група ' + esc(it.p.grp) + '</span>' : '') + (it.p.note ? ' <span class="pnote">· ' + esc(it.p.note) + '</span>' : '') + '</td><td class="mono">' + fmt(it.p.L) + '</td><td class="mono">' + fmt(it.p.W) + '</td><td class="mono">x ' + fmt(g.trim + it.x) + ', y ' + fmt(g.trim + it.y) + (it.r ? ' · завъртян' : '') + '</td><td>' + (ed || '–') + '</td></tr>';
         });
         h += '</tbody></table></div></details></article>';
       });
@@ -1940,7 +1958,7 @@ html { touch-action: manipulation; }
         t += '\nЛист ' + (bi + 1) + ' · ' + fmt(b.used / ((+g.m.L) * (+g.m.W)) * 100, 1) + '%\n';
         b.items.slice().sort(function (a, c) { return a.p.n - c.p.n; }).forEach(function (it) {
           var e = it.p.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(',');
-          t += '  ' + it.p.n + '. ' + it.p.name + (it.p.grp ? ' [група ' + it.p.grp + ']' : '') + ' ' + fmt(it.p.L) + '×' + fmt(it.p.W) + ' @ x' + fmt(g.trim + it.x) + ' y' + fmt(g.trim + it.y) + (it.r ? ' завъртян' : '') + (ed ? ' кант ' + ed : '') + '\n';
+          t += '  ' + it.p.n + '. ' + it.p.name + (it.p.grp ? ' [група ' + it.p.grp + ']' : '') + (it.p.note ? ' (' + it.p.note + ')' : '') + ' ' + fmt(it.p.L) + '×' + fmt(it.p.W) + ' @ x' + fmt(g.trim + it.x) + ' y' + fmt(g.trim + it.y) + (it.r ? ' завъртян' : '') + (ed ? ' кант ' + ed : '') + '\n';
         });
       });
       g.bad.forEach(function (p) { t += '  НЕ СЕ СЪБИРА: ' + p.name + ' ' + fmt(p.L) + '×' + fmt(p.W) + '\n'; });
@@ -1997,9 +2015,10 @@ html { touch-action: manipulation; }
         '<td><select aria-label="Група за продължение на шарката" data-t="p" data-i="' + i + '" data-f="grp">' + grpOpts(p.grp) + '</select></td>' +
         '<td><select aria-label="Ред в групата" data-t="p" data-i="' + i + '" data-f="row"' + (p.grp ? '' : ' disabled') + '>' + rowOpts(p.row) + '</select></td>' +
         ck(0, 'Д1') + ck(1, 'Д2') + ck(2, 'Ш1') + ck(3, 'Ш2') +
+        '<td><input type="text" enterkeyhint="next" maxlength="120" aria-label="Коментар към детайла" placeholder="напр. кант бял" data-t="p" data-i="' + i + '" data-f="note" value="' + esc(p.note || '') + '"></td>' +
         '<td><button type="button" class="ghost" data-del="p" data-i="' + i + '" aria-label="Премахни детайла">Махни</button></td></tr>';
     }).join('');
-    labelCells('#partBody', ['Тип детайл', 'Дължина', 'Ширина', 'Бр.', 'Материал', 'Посока', 'Група', 'Ред в групата', 'Д1', 'Д2', 'Ш1', 'Ш2', '']);
+    labelCells('#partBody', ['Тип детайл', 'Дължина', 'Ширина', 'Бр.', 'Материал', 'Посока', 'Група', 'Ред в групата', 'Д1', 'Д2', 'Ш1', 'Ш2', 'Коментар', '']);
   }
   function syncSettings() {
     $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
@@ -2292,7 +2311,7 @@ html { touch-action: manipulation; }
     renderMats(); renderParts(); schedule(); focusMat(state.materials.length - 1);
   });
   $('#addPart').addEventListener('click', function () {
-    state.parts.push({ name: 'Детайл', L: '', W: '', q: 1, mat: state.materials[0] ? state.materials[0].id : '', dir: 'auto', grp: '', row: '', e: [0, 0, 0, 0] });
+    state.parts.push({ name: 'Детайл', L: '', W: '', q: 1, mat: state.materials[0] ? state.materials[0].id : '', dir: 'auto', grp: '', row: '', note: '', e: [0, 0, 0, 0] });
     renderParts(); schedule();
     var rows = $('#partBody').querySelectorAll('tr'), last = rows[rows.length - 1];
     if (last) { var inp = last.querySelector('input'); inp.focus(); inp.select(); }
@@ -2341,7 +2360,7 @@ html { touch-action: manipulation; }
       if (isNaN(nums[0]) || !/^[\d\s.,]+$/.test(c[0])) { name = c[0] || 'Детайл'; off = 1; }
       var L = nums[off], W = nums[off + 1], q = nums[off + 2];
       if (!(L > 0 && W > 0)) return;
-      var tail = c.slice(off + 3), e = [0, 0, 0, 0], rotTxt = '', mnameRaw = '', grpTxt = '', rowNoTxt = '', szL = 0, szW = 0;
+      var tail = c.slice(off + 3), e = [0, 0, 0, 0], rotTxt = '', mnameRaw = '', grpTxt = '', rowNoTxt = '', noteTxt = '', szL = 0, szW = 0;
       // Размер на плочата в края на реда (напр. „2850×2100“, от библиотеката на KRAFTPLAN): сваля се от колоните и важи за материала.
       tail = tail.filter(function (t) {
         var m = /^(\d{3,5})(?:[.,]\d+)?\s*[x×хХX*]\s*(\d{3,5})(?:[.,]\d+)?$/.exec(t);
@@ -2350,8 +2369,8 @@ html { touch-action: manipulation; }
       });
       var flagRe = /^(|0|1|2|x|х|да|не|yes|no|y|n|-|\+|\d+([.,]\d+)?)$/i;
       if (tail.length >= 4 && tail.slice(0, 4).every(function (t) { return flagRe.test(t); })) {
-        e = tail.slice(0, 4).map(edgeOn); mnameRaw = tail[4] || ''; rotTxt = tail[5] || ''; grpTxt = tail[6] || ''; rowNoTxt = tail[7] || '';
-      } else { mnameRaw = tail[0] || ''; rotTxt = tail[1] || ''; grpTxt = tail[2] || ''; rowNoTxt = tail[3] || ''; }
+        e = tail.slice(0, 4).map(edgeOn); mnameRaw = tail[4] || ''; rotTxt = tail[5] || ''; grpTxt = tail[6] || ''; rowNoTxt = tail[7] || ''; noteTxt = tail[8] || '';
+      } else { mnameRaw = tail[0] || ''; rotTxt = tail[1] || ''; grpTxt = tail[2] || ''; rowNoTxt = tail[3] || ''; noteTxt = tail[4] || ''; }
       var mname = mnameRaw.trim(), mat = state.materials[0];
       if (!mat && !mname) { mat = { id: nid(), name: 'Плоскост', L: 2800, W: 2070, price: '' }; state.materials.push(mat); created.push(mat.name); }
       if (mname) {
@@ -2367,7 +2386,7 @@ html { touch-action: manipulation; }
         mat = found;
       }
       var dir = /върт|free|rot/i.test(rotTxt) ? 'rot' : /шарк|fix|grain/i.test(rotTxt) ? 'fix' : 'auto';
-      state.parts.push({ name: name, L: L, W: W, q: q > 0 ? Math.floor(q) : 1, mat: mat.id, dir: dir, grp: grpTxt.slice(0, 10), row: (parseInt(rowNoTxt, 10) >= 1 && parseInt(rowNoTxt, 10) <= 8) ? String(parseInt(rowNoTxt, 10)) : '', e: e });
+      state.parts.push({ name: name, L: L, W: W, q: q > 0 ? Math.floor(q) : 1, mat: mat.id, dir: dir, grp: grpTxt.slice(0, 10), row: (parseInt(rowNoTxt, 10) >= 1 && parseInt(rowNoTxt, 10) <= 8) ? String(parseInt(rowNoTxt, 10)) : '', note: noteTxt.slice(0, 120), e: e });
       added++;
     });
     $('#pasteMsg').textContent = added
@@ -2427,7 +2446,7 @@ html { touch-action: manipulation; }
       if (!lk.sheets.length) delete state.locked[mid];
       msg.textContent = 'Листът е отключен и пак се подрежда заедно с останалите.';
     } else {
-      var items = b.items.map(function (it) { return { name: it.p.name, L: it.p.L, W: it.p.W, e: it.p.e || [0, 0, 0, 0], gk: it.p.grp || '', x: it.x, y: it.y, r: !!it.r, hue: it.p.hue, n: it.p.n }; });
+      var items = b.items.map(function (it) { return { name: it.p.name, L: it.p.L, W: it.p.W, e: it.p.e || [0, 0, 0, 0], gk: it.p.grp || '', note: it.p.note || '', x: it.x, y: it.y, r: !!it.r, hue: it.p.hue, n: it.p.n }; });
       if (!items.length) return;
       var lk2 = state.locked[mid] || (state.locked[mid] = { sig: JSON.stringify([g.W, g.H, g.k, state.s.mode, g.trim > 0 ? g.tn : 0]), sheets: [] });
       lk2.sheets.push(items);
@@ -2544,7 +2563,7 @@ html { touch-action: manipulation; }
       // В истински цял екран се виждат само елементите вътре в него, затова балончето се премества там.
       var host = document.fullscreenElement || document.body;
       if (tip.parentNode !== host) host.appendChild(tip);
-      tip.innerHTML = '<b>' + esc(a[1]) + '</b> <small>№ ' + esc(a[0]) + '</small><br><span class="tsz">' + esc(a[2]) + '</span><br><small>кант: ' + esc(a[3]) + (a[4] ? ' · ' + esc(a[4]) : '') + '</small>';
+      tip.innerHTML = '<b>' + esc(a[1]) + '</b> <small>№ ' + esc(a[0]) + '</small><br><span class="tsz">' + esc(a[2]) + '</span><br><small>кант: ' + esc(a[3]) + (a[4] ? ' · ' + esc(a[4]) : '') + '</small>' + (a[5] ? '<br><small class="tnote">✎ ' + esc(a[5]) + '</small>' : '');
       tip.hidden = false;
       var w = tip.offsetWidth, h = tip.offsetHeight, x = e.clientX + 14, y = e.clientY + 16;
       if (e.pointerType === 'touch') {   // с пръст: над пръста, за да не се закрива от ръката
@@ -2971,7 +2990,7 @@ html { touch-action: manipulation; }
         h += '<div class="ppt' + (rows.length > 34 ? ' many' : '') + '"><table><thead><tr><th>№</th><th>Детайл</th><th>Размер</th><th>Кант</th></tr></thead><tbody>';
         rows.forEach(function (it) {
           var e = it.p.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
-          h += '<tr><td>' + it.p.n + '</td><td>' + esc(it.p.name) + (it.r ? ' ↻' : '') + '</td><td>' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</td><td>' + ed + '</td></tr>';
+          h += '<tr><td>' + it.p.n + '</td><td>' + esc(it.p.name) + (it.r ? ' ↻' : '') + (it.p.note ? ' <i class="pnote">· ' + esc(it.p.note) + '</i>' : '') + '</td><td>' + fmt(it.p.L) + '×' + fmt(it.p.W) + '</td><td>' + ed + '</td></tr>';
         });
         h += '</tbody></table></div>';
         h += '<div class="ppm">Използване ' + fmt(b.used / area * 100, 1) + '% · рязане ' + fmt((b.cutLen || 0) / 1000, 1) + ' м · ' + (r.mode === 'nest' ? 'нестинг' : 'форматен трион') + ' · рязане ' + fmt(g.k) + ' мм · обрезка ' + fmt(g.trim) + ' мм' + (r.mode === 'saw' && !b.noGuil ? ' · завъртания на листа ' + turnsOf(b) : '') + (b.noGuil ? ' · ⚠ не се реже с трион' : '') + (showCuts ? ' · цифрите в кръговете са редът на рязане' : '') + '</div></section>';
@@ -2981,7 +3000,7 @@ html { touch-action: manipulation; }
         h += '<section class="pp"><div class="pph"><span><b>' + esc(title) + '</b> · ' + date + '</span><span><b>' + esc(g.m.name) + '</b> · извадени от листа</span></div><div class="ppt"><table><thead><tr><th>№</th><th>Детайл</th><th>Размер</th><th>Кант</th></tr></thead><tbody>';
         op.forEach(function (q) {
           var e = q.e, ed = ['Д1', 'Д2', 'Ш1', 'Ш2'].filter(function (_, i) { return e[i]; }).join(' ');
-          h += '<tr><td>' + q.n + '</td><td>' + esc(q.name) + '</td><td>' + fmt(q.L) + '×' + fmt(q.W) + '</td><td>' + ed + '</td></tr>';
+          h += '<tr><td>' + q.n + '</td><td>' + esc(q.name) + (q.note ? ' <i class="pnote">· ' + esc(q.note) + '</i>' : '') + '</td><td>' + fmt(q.L) + '×' + fmt(q.W) + '</td><td>' + ed + '</td></tr>';
         });
         h += '</tbody></table></div><div class="ppm">⚠ Тези детайли не са сложени на лист в този разкрой.</div></section>';
       }
@@ -3068,7 +3087,7 @@ html { touch-action: manipulation; }
     });
     var parts = d.parts.map(function (p) {
       var e = Array.isArray(p.e) ? p.e : [0, 0, 0, 0];
-      return { name: String(p.name || 'Детайл'), L: +p.L > 0 ? +p.L : '', W: +p.W > 0 ? +p.W : '', q: +p.q > 0 ? Math.floor(+p.q) : 1, mat: byOld[p.mat] || (mats[0] ? mats[0].id : ''), dir: (p.dir === 'rot' || p.dir === 'fix') ? p.dir : (p.rot ? 'rot' : 'auto'), grp: String(p.grp || '').slice(0, 10), row: (+p.row >= 1 && +p.row <= 8) ? String(Math.floor(+p.row)) : '', e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0] };
+      return { name: String(p.name || 'Детайл'), note: String(p.note || '').slice(0, 120), L: +p.L > 0 ? +p.L : '', W: +p.W > 0 ? +p.W : '', q: +p.q > 0 ? Math.floor(+p.q) : 1, mat: byOld[p.mat] || (mats[0] ? mats[0].id : ''), dir: (p.dir === 'rot' || p.dir === 'fix') ? p.dir : (p.rot ? 'rot' : 'auto'), grp: String(p.grp || '').slice(0, 10), row: (+p.row >= 1 && +p.row <= 8) ? String(Math.floor(+p.row)) : '', e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0] };
     });
     var man = {};
     if (d.manual && typeof d.manual === 'object') Object.keys(d.manual).forEach(function (ok) {
@@ -3081,7 +3100,7 @@ html { touch-action: manipulation; }
       var shs = v.sheets.map(function (sh) {
         return (Array.isArray(sh) ? sh : []).map(function (o) {
           var e = Array.isArray(o.e) ? o.e : [0, 0, 0, 0];
-          return { name: String(o.name || 'Детайл'), L: +o.L, W: +o.W, e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0], gk: String(o.gk || ''), x: +o.x, y: +o.y, r: !!o.r, hue: isNaN(+o.hue) ? 200 : +o.hue, n: +o.n || 0 };
+          return { name: String(o.name || 'Детайл'), note: String(o.note || '').slice(0, 120), L: +o.L, W: +o.W, e: [e[0] ? 1 : 0, e[1] ? 1 : 0, e[2] ? 1 : 0, e[3] ? 1 : 0], gk: String(o.gk || ''), x: +o.x, y: +o.y, r: !!o.r, hue: isNaN(+o.hue) ? 200 : +o.hue, n: +o.n || 0 };
         }).filter(function (o) { return o.L > 0 && o.W > 0 && isFinite(o.x) && isFinite(o.y); });
       }).filter(function (sh) { return sh.length; });
       if (shs.length) lk[id] = { sig: v.sig, sheets: shs };
@@ -3491,7 +3510,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '89';
+  var APP_VERSION = '90';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
