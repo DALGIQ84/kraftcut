@@ -867,6 +867,18 @@ html { touch-action: manipulation; }
     });
     return best;
   }
+  // Лист „на ивици по дължината“: има ли напълно хоризонтален разрез през целия лист (редове), т.е. детайлите се вадят от ивици.
+  function rowBanded(b) {
+    var it = b.items.slice(), n = it.length, i, top = 0, mb = 0, bands = 0;
+    if (n <= 1) return true;
+    it.sort(function (a, c) { return a.y - c.y; });
+    for (i = 0; i < n; i++) {
+      if (i === 0 || it[i].y >= mb) { bands++; }
+      var bt = it[i].y + it[i].h; if (i === 0 || bt > mb) mb = bt;
+    }
+    return bands >= 2 || mb <= b.H * 0.6;
+  }
+
   function scoreBins(bins, machine, trimOn, prio, polish, tidy) {
     var cut = 0, rem = 0, minFrac = 1, minN = 0;
     bins.forEach(function (b) {
@@ -883,7 +895,7 @@ html { touch-action: manipulation; }
     var remPen = 0;
     if (polish && machine === 'saw') bins.forEach(function (b) {
       var ar = b.W * b.H;
-      if (tidy) { var er = maxEdgeRect(b); remPen += 40000 * (1 - er / ar) + 15000 * Math.max(0, ar - b.used - er) / ar; }
+      if (tidy) { var er = maxEdgeRect(b); remPen += 40000 * (1 - er / ar) + 15000 * Math.max(0, ar - b.used - er) / ar + (rowBanded(b) ? 0 : 30000); }
       else remPen += 40000 * (1 - maxEmptyRect(b) / ar);
     });
     var s2 = polish && prio !== 'waste' ? cut + remPen + (machine === 'saw' ? minFrac * 40000 + minN * 200 : 0) : prio === 'waste' ? -rem / 1e3 + cut / 1e6 + minFrac * 1e3 : prio === 'cut' ? cut - rem / 1e6 + minFrac * 1e3 : cut / 1e3 - 4 * rem / 1e6 + 15 * minFrac;
@@ -3672,7 +3684,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '93';
+  var APP_VERSION = '94';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
