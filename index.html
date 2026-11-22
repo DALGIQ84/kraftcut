@@ -870,16 +870,18 @@ html { touch-action: manipulation; }
   }
   // Лист „на ивици по дължината“: има ли напълно хоризонтален разрез през целия лист (редове), т.е. детайлите се вадят от ивици.
   function rowBanded(b, vert) {
-    var it = b.items.slice(), n = it.length, i, ax = vert ? 'x' : 'y', aw = vert ? 'w' : 'h', dim = (vert ? b.W : b.H) * 0.6;
-    if (n <= 1) return true;
+    var it = b.items.slice(), n = it.length, i, ax = vert ? 'x' : 'y', aw = vert ? 'w' : 'h';
+    if (n <= 3) return true;
     it.sort(function (a, c) { return a[ax] - c[ax]; });
-    var st0 = 0, mb = 0, cnt = 0;
+    var mb = 0, cnt = 0, big = 0;
     for (i = 0; i < n; i++) {
-      if (cnt > 0 && it[i][ax] >= mb) { if (cnt > 1 && mb - st0 > dim) return false; cnt = 0; }
-      if (cnt === 0) { st0 = it[i][ax]; mb = 0; }
+      if (cnt > 0 && it[i][ax] >= mb) { if (cnt > big) big = cnt; cnt = 0; }
+      if (cnt === 0) mb = 0;
       cnt++; var bt = it[i][ax] + it[i][aw]; if (bt > mb) mb = bt;
     }
-    return !(cnt > 1 && mb - st0 > dim);
+    if (cnt > big) big = cnt;
+    // една ивица с почти всичко в нея не е „ивици“; позволяваме до 70% от детайлите в най-голямата.
+    return big <= Math.max(3, n * 0.7);
   }
   // Маска на „подреждането по реда на рязане“: 1 = остатък в края, 2 = ивици надълго, 4 = ивици на късо.
   // Връща true, ако ивиците (разрезите през целия лист) са вертикални, т.е. колони.
@@ -3709,7 +3711,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '95';
+  var APP_VERSION = '96';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
