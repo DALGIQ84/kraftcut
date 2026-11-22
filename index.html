@@ -464,6 +464,7 @@ html { touch-action: manipulation; }
       <div class="field"><span class="label">Текстура</span><label class="check"><input id="allRot" type="checkbox"> Върти всички, без шарка</label></div>
       <div class="field"><label class="label" for="prio">Подреждане</label><select id="prio"><option value="balance">Баланс: остатък и рязане</option><option value="waste">Най-голям цял остатък</option><option value="cut">Най-къса дължина на рязане</option></select></div>
       <div class="field"><label class="label" for="strat" title="Автоматично: програмата сама избира реда за най-добър резултат. Големите първо: големите детайли се слагат с приоритет, а малките се намества след тях в останалото място. Може да са нужни повече листове.">Ред на слагане</label><select id="strat"><option value="auto">Автоматично (най-добро)</option><option value="big">Големите детайли първи</option></select></div>
+      <div class="field"><label class="label" for="remMode" title="Събран в края: детайлите се подреждат от горния ляв ъгъл, а остатъкът е една ивица най-долу или най-вдясно. Най-малко рязане: програмата гледа само по-малко метри, остатъкът може да е по средата.">Остатък</label><select id="remMode"><option value="edge">Събран в края</option><option value="cut">Най-малко рязане</option></select></div>
       <div class="field"><label class="label" for="edgeAdd">Запас за кант (%)</label><input id="edgeAdd" type="number" min="0" step="1" value="10"></div>
     </div>
     <p class="hint" style="margin:0">Нестинг: детайлите се слагат свободно, фрезата прави разреза (обикновено 6 мм). Форматен трион: всички разрези са прави през целия остатък, както реже трионът (обикновено 4 мм).</p>
@@ -659,7 +660,7 @@ html { touch-action: manipulation; }
   function defaults() {
     return {
       name: '',
-      s: { kerf: 4, trim: 10, trimSide: 'all2', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
+      s: { kerf: 4, trim: 10, trimSide: 'all2', remMode: 'edge', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
       materials: [],
       parts: [],
       manual: {},
@@ -866,7 +867,7 @@ html { touch-action: manipulation; }
     });
     return best;
   }
-  function scoreBins(bins, machine, trimOn, prio, polish) {
+  function scoreBins(bins, machine, trimOn, prio, polish, tidy) {
     var cut = 0, rem = 0, minFrac = 1, minN = 0;
     bins.forEach(function (b) {
       b.cutLen = binCut(b, machine, trimOn); b.remnant = binRemnant(b);
@@ -880,7 +881,11 @@ html { touch-action: manipulation; }
     bins.forEach(function (b) { var f = b.used / area0; sumFr += f; sq += f * f; });
     if (!polish && bins.length > Math.ceil(sumFr - 1e-9)) return bins.length * 1e12 - sq * 1e10 + cut / 1e3;
     var remPen = 0;
-    if (polish && machine === 'saw') bins.forEach(function (b) { remPen += 40000 * (1 - maxEmptyRect(b) / (b.W * b.H)); });
+    if (polish && machine === 'saw') bins.forEach(function (b) {
+      var ar = b.W * b.H;
+      if (tidy) { var er = maxEdgeRect(b); remPen += 40000 * (1 - er / ar) + 15000 * Math.max(0, ar - b.used - er) / ar; }
+      else remPen += 40000 * (1 - maxEmptyRect(b) / ar);
+    });
     var s2 = polish && prio !== 'waste' ? cut + remPen + (machine === 'saw' ? minFrac * 40000 + minN * 200 : 0) : prio === 'waste' ? -rem / 1e3 + cut / 1e6 + minFrac * 1e3 : prio === 'cut' ? cut - rem / 1e6 + minFrac * 1e3 : cut / 1e3 - 4 * rem / 1e6 + 15 * minFrac;
     return bins.length * 1e12 + s2;
   }
@@ -1114,10 +1119,10 @@ html { touch-action: manipulation; }
   function withNoRot(c, v) { return { algo: c.algo, score: c.score, split: c.split, vert: c.vert, pref: c.pref, shelfOri: c.shelfOri, noRot: !!v }; }
   // Търсачът помни докъде е стигнал за същите входни данни и продължава от там.
   var solvers = {};
-  function getSolver(sig, parts, W, H, k, machine, trimOn, prio, big) {
+  function getSolver(sig, parts, W, H, k, machine, trimOn, prio, big, tidy) {
     var st = solvers[sig];
     if (!st) {
-      st = solvers[sig] = { parts: parts, W: W, H: H, k: k, machine: machine, trimOn: trimOn, prio: prio, bigThr: big ? 0.04 * W * H : 0, combos: combosFor(machine), i: 0, sig: sig, sentSc: Infinity, rnd: makeRng((Date.now() ^ 12345 ^ seedSalt) >>> 0), best: null, improved: false, elite: [] };
+      st = solvers[sig] = { parts: parts, W: W, H: H, k: k, machine: machine, trimOn: trimOn, prio: prio, tidy: !!tidy, bigThr: big ? 0.04 * W * H : 0, combos: combosFor(machine), i: 0, sig: sig, sentSc: Infinity, rnd: makeRng((Date.now() ^ 12345 ^ seedSalt) >>> 0), best: null, improved: false, elite: [] };
       st.sweep = st.combos.length * 5;
       st.parts.forEach(function (p, i) { p._i = i; });
       st.lb = Math.max(1, Math.ceil(parts.reduce(function (a, p) { return a + p.w * p.h; }, 0) / (W * H) - 1e-9));
@@ -1130,7 +1135,7 @@ html { touch-action: manipulation; }
   function setPolish(st, on) {
     if (!!st.polish === !!on) return;
     st.polish = !!on; st.sentSc = Infinity;
-    st.elite.forEach(function (e) { e.sc = scoreBins(e.bins, st.machine, st.trimOn, st.prio, st.polish); });
+    st.elite.forEach(function (e) { e.sc = scoreBins(e.bins, st.machine, st.trimOn, st.prio, st.polish, st.tidy); });
     st.elite.sort(function (a, b) { return a.sc - b.sc; });
     if (st.elite.length) { st.best = st.elite[0]; st.improved = true; if (on && (!st.polBest || st.best.sc < st.polBest.sc)) st.polBest = st.best; }
   }
@@ -1145,7 +1150,7 @@ html { touch-action: manipulation; }
     order = bigFirst(st, order);
     var bins = cfg.algo === 'st' ? packStrips(order, st.W, st.H, st.k, cfg) : packOrder(order, st.W, st.H, st.k, cfg);
     if (!bins) return null;
-    return { order: order, cfg: cfg, bins: bins, sc: scoreBins(bins, st.machine, st.trimOn, st.prio, st.polish) };
+    return { order: order, cfg: cfg, bins: bins, sc: scoreBins(bins, st.machine, st.trimOn, st.prio, st.polish, st.tidy) };
   }
   // Опит да се махне един лист: детайлите от най-празния лист и от още един-два листа се подреждат наново в по-малко листове.
   function repairStep(st, rnd) {
@@ -1168,7 +1173,7 @@ html { touch-action: manipulation; }
       if (nb && nb.length < pick.length) {
         var all = rest.concat(nb), order = [];
         all.forEach(function (b) { b.items.forEach(function (it) { order.push(it.p); }); });
-        return { order: order, cfg: base.cfg, bins: all, sc: scoreBins(all, st.machine, st.trimOn, st.prio, st.polish) };
+        return { order: order, cfg: base.cfg, bins: all, sc: scoreBins(all, st.machine, st.trimOn, st.prio, st.polish, st.tidy) };
       }
     }
     return false;
@@ -1187,7 +1192,7 @@ html { touch-action: manipulation; }
       var nb = cfg.algo === 'st' ? packStrips(ord, st.W, st.H, st.k, cfg) : packOrder(ord, st.W, st.H, st.k, cfg);
       if (!nb || nb.length !== 1) continue;
       var all = bins.slice(); all[bi] = nb[0];
-      var sc = scoreBins(all, st.machine, st.trimOn, st.prio, st.polish);
+      var sc = scoreBins(all, st.machine, st.trimOn, st.prio, st.polish, st.tidy);
       if (!bestc || sc < bestc.sc) bestc = { bins: all, sc: sc, cfg: cfg };
     }
     if (!bestc) return false;
@@ -1210,13 +1215,143 @@ html { touch-action: manipulation; }
       var cfg = withNoRot(st.combos[Math.floor(rnd() * st.combos.length)], rnd() < 0.4);
       var nb = cfg.algo === 'st' ? packStrips(ord, st.W, st.H, st.k, cfg) : packOrder(ord, st.W, st.H, st.k, cfg);
       if (!nb || nb.length > pick.length) continue;
-      var all = rest.concat(nb), sc = scoreBins(all, st.machine, st.trimOn, st.prio, st.polish);
+      var all = rest.concat(nb), sc = scoreBins(all, st.machine, st.trimOn, st.prio, st.polish, st.tidy);
       if (!bestc || sc < bestc.sc) bestc = { bins: all, sc: sc };
     }
     if (!bestc) return false;
     var order = [];
     bestc.bins.forEach(function (b) { b.items.forEach(function (it) { order.push(it.p); }); });
     return { order: order, cfg: base.cfg, bins: bestc.bins, sc: bestc.sc };
+  }
+  // Най-големият свободен правоъгълник, който опира в долния или десния край на листа (там остатъкът е събран и удобен).
+  function maxEdgeRect(bin) {
+    if (bin._E !== undefined && bin._En === bin.items.length) return bin._E;
+    var k = bin.k, BW = bin.W + k, BH = bin.H + k, g = Math.max(20, Math.ceil(Math.max(BW, BH) / 60)), nx = Math.ceil(BW / g), ny = Math.ceil(BH / g), occ = new Uint8Array(nx * ny), i, x, y, it;
+    for (i = 0; i < bin.items.length; i++) {
+      it = bin.items[i];
+      var x0 = Math.floor(it.x / g), x1 = Math.min(nx, Math.ceil((it.x + it.w + k) / g)), y0 = Math.floor(it.y / g), y1 = Math.min(ny, Math.ceil((it.y + it.h + k) / g));
+      for (y = y0; y < y1; y++) for (x = x0; x < x1; x++) occ[y * nx + x] = 1;
+    }
+    function hist(h, n) {
+      var best = 0, stack = [], q;
+      for (q = 0; q <= n; q++) {
+        var v = q === n ? 0 : h[q], st = q;
+        while (stack.length && stack[stack.length - 1][1] >= v) { var t = stack.pop(), a = t[1] * (q - t[0]); if (a > best) best = a; st = t[0]; }
+        stack.push([st, v]);
+      }
+      return best;
+    }
+    var hb = new Int32Array(nx), hr = new Int32Array(ny);
+    for (x = 0; x < nx; x++) { y = ny - 1; while (y >= 0 && !occ[y * nx + x]) { hb[x]++; y--; } }
+    for (y = 0; y < ny; y++) { x = nx - 1; while (x >= 0 && !occ[y * nx + x]) { hr[y]++; x--; } }
+    bin._E = Math.max(hist(hb, nx), hist(hr, ny)) * g * g; bin._En = bin.items.length;
+    return bin._E;
+  }
+  // Подреждане „редове → колони → купчини“ с отгряване: детайлите са от горния ляв ъгъл, остатъкът е една ивица най-долу.
+  function srSolve(parts, W, H, k, rnd, iters) {
+    var n = parts.length, BW = W + k, BH = H + k, area = BW * BH, i;
+    var pw = [], ph = [], pa = [], can = [];
+    for (i = 0; i < n; i++) { pw[i] = parts[i].w + k; ph[i] = parts[i].h + k; pa[i] = parts[i].w * parts[i].h; can[i] = !!parts[i].rot && parts[i].w !== parts[i].h; }
+    var A = 40000, S = 15000, P = 4000, lastOver = 0;
+    function clone(rows) { return rows.map(function (r) { return r.map(function (c) { return c.map(function (q) { return { i: q.i, r: q.r }; }); }); }); }
+    function evalS(rows) {
+      var cut = 0, sumH = 0, over = 0, waste = 0, ri, ci, qi;
+      for (ri = 0; ri < rows.length; ri++) {
+        var row = rows[ri], rh = 0, rw = 0, cs = row.length, cws = [], chs = [], ia = 0;
+        for (ci = 0; ci < cs; ci++) {
+          var col = row[ci], cw = 0, chh = 0;
+          for (qi = 0; qi < col.length; qi++) { var q = col[qi], w = q.r ? ph[q.i] : pw[q.i], h = q.r ? pw[q.i] : ph[q.i]; if (w > cw) cw = w; chh += h; ia += pa[q.i]; }
+          cws.push(cw); chs.push(chh); rw += cw; if (chh > rh) rh = chh;
+        }
+        if (rw > BW) over += rw - BW;
+        sumH += rh; cut += BW - k; waste += rh * BW - ia;
+        var x = 0;
+        for (ci = 0; ci < cs; ci++) {
+          var col2 = row[ci], cw2 = cws[ci];
+          if (x + cw2 < BW) cut += rh - k;
+          for (qi = 0; qi < col2.length; qi++) {
+            var q2 = col2[qi], w2 = q2.r ? ph[q2.i] : pw[q2.i], h2 = q2.r ? pw[q2.i] : ph[q2.i];
+            if (qi < col2.length - 1 || chs[ci] < rh) cut += cw2 - k;
+            if (w2 < cw2) cut += h2 - k;
+          }
+          x += cw2;
+        }
+      }
+      if (sumH >= BH) cut -= BW - k;
+      if (sumH > BH) over += sumH - BH;
+      var strip = (BH - sumH) * BW; if (strip < 0) strip = 0;
+      lastOver = over;
+      return cut + A * (1 - strip / area) + S * (waste / area) + over * P;
+    }
+    var idx = []; for (i = 0; i < n; i++) idx.push(i);
+    idx.sort(function (a, b) { return Math.max(ph[b], pw[b]) - Math.max(ph[a], pw[a]); });
+    var rows = [], cur = [], cw0 = 0;
+    idx.forEach(function (p) { if (cw0 + pw[p] > BW && cur.length) { rows.push(cur); cur = []; cw0 = 0; } cur.push([{ i: p, r: false }]); cw0 += pw[p]; });
+    if (cur.length) rows.push(cur);
+    var cost = evalS(rows), best = lastOver ? null : clone(rows), bestCost = lastOver ? Infinity : cost, T0 = 2500, T1 = 25;
+    for (var it = 0; it < iters; it++) {
+      var T = T0 * Math.pow(T1 / T0, it / iters), m = rnd(), cand = clone(rows), ri2, ci2, qi2;
+      ri2 = Math.floor(rnd() * cand.length); ci2 = Math.floor(rnd() * cand[ri2].length); qi2 = Math.floor(rnd() * cand[ri2][ci2].length);
+      var piece = cand[ri2][ci2][qi2];
+      if (m < 0.18) { if (!can[piece.i]) continue; piece.r = !piece.r; }
+      else if (m < 0.45) { var r2 = Math.floor(rnd() * cand.length), c2 = Math.floor(rnd() * cand[r2].length), q2 = Math.floor(rnd() * cand[r2][c2].length), o = cand[r2][c2][q2], ti = piece.i, tr = piece.r; piece.i = o.i; piece.r = o.r; o.i = ti; o.r = tr; }
+      else if (m < 0.8) { cand[ri2][ci2].splice(qi2, 1); var r3 = Math.floor(rnd() * cand.length), c3 = Math.floor(rnd() * cand[r3].length); cand[r3][c3].splice(Math.floor(rnd() * (cand[r3][c3].length + 1)), 0, piece); }
+      else if (m < 0.92) { cand[ri2][ci2].splice(qi2, 1); cand[Math.floor(rnd() * cand.length)].push([piece]); }
+      else { cand[ri2][ci2].splice(qi2, 1); cand.splice(Math.floor(rnd() * (cand.length + 1)), 0, [[piece]]); }
+      var cl = [];
+      for (var a = 0; a < cand.length; a++) { var rr = cand[a].filter(function (c) { return c.length; }); if (rr.length) cl.push(rr); }
+      var c = evalS(cl), d = c - cost, ov = lastOver;
+      if (d <= 0 || rnd() < Math.exp(-d / T)) { rows = cl; cost = c; if (ov === 0 && c < bestCost) { bestCost = c; best = clone(cl); } }
+    }
+    return best;
+  }
+  function srBuild(rows, parts, W, H, k) {
+    var BW = W + k, BH = H + k, bn = { W: W, H: H, k: k, cfg: { algo: 'st', vert: false, pref: 1, shelfOri: 'short', noRot: false }, free: [], rects: [], items: [], used: 0, cut: 0, nextY: 0 }, free = [], bad = false;
+    var info = rows.map(function (row) {
+      var rh = 0;
+      var cols = row.map(function (col) { var cw = 0, ch = 0; col.forEach(function (q) { var p = parts[q.i], w = (q.r ? p.h : p.w) + k, h = (q.r ? p.w : p.h) + k; if (w > cw) cw = w; ch += h; }); if (ch > rh) rh = ch; return { cw: cw, ch: ch, col: col }; });
+      return { rh: rh, cols: cols };
+    });
+    info.sort(function (a, b) { return b.rh - a.rh; });
+    var y = 0;
+    info.forEach(function (r) {
+      var x = 0; if (y + r.rh > BH) bad = true;
+      if (y + r.rh < BH) bn.cut += BW - k;
+      r.cols.forEach(function (c) {
+        if (x + c.cw < BW) bn.cut += r.rh - k;
+        var cy = y;
+        c.col.forEach(function (q, qi) {
+          var p = parts[q.i], w = (q.r ? p.h : p.w) + k, h = (q.r ? p.w : p.h) + k;
+          bn.items.push({ p: p, x: x, y: cy, w: w - k, h: h - k, r: q.r }); bn.rects.push({ x: x, y: cy, w: w, h: h }); bn.used += p.w * p.h;
+          if (qi < c.col.length - 1 || c.ch < r.rh) bn.cut += c.cw - k;
+          if (w < c.cw) { bn.cut += h - k; free.push({ x: x + w, y: cy, w: c.cw - w, h: h }); }
+          cy += h;
+        });
+        if (c.ch < r.rh) free.push({ x: x, y: cy, w: c.cw, h: y + r.rh - cy });
+        x += c.cw;
+      });
+      if (x > BW) bad = true;
+      if (x < BW) free.push({ x: x, y: y, w: BW - x, h: r.rh });
+      y += r.rh;
+    });
+    if (y < BH) free.push({ x: 0, y: y, w: BW, h: BH - y });
+    bn.nextY = y; bn.free = free;
+    return bad ? null : bn;
+  }
+  // Подреждане на един лист „редове от горе → остатък най-долу“; взима се само ако е по-добро по оценката.
+  function srStep(st, rnd) {
+    var base = st.best, bins = base.bins, n = bins.length;
+    if (n < 1) return false;
+    var bi = Math.floor(rnd() * n), sub = bins[bi].items.map(function (it) { return it.p; });
+    if (sub.length < 2 || sub.length > 120) return false;
+    var res = srSolve(sub, st.W, st.H, st.k, rnd, Math.min(90000, 9000 + sub.length * 3500));
+    if (!res) return false;
+    var nb = srBuild(res, sub, st.W, st.H, st.k);
+    if (!nb) return false;
+    var all = bins.slice(); all[bi] = nb;
+    var sc = scoreBins(all, st.machine, st.trimOn, st.prio, st.polish, st.tidy), order = [];
+    all.forEach(function (b) { b.items.forEach(function (it) { order.push(it.p); }); });
+    return { order: order, cfg: base.cfg, bins: all, sc: sc };
   }
   function stepSolver(st, ms) {
     var t0 = performance.now(), minIter = st.i === 0 ? st.combos.length : 0, rnd = st.rnd;
@@ -1229,8 +1364,13 @@ html { touch-action: manipulation; }
         var rcfg = { vert: rnd() < 0.3, noRot: rnd() < 0.25, noise: [0, 0.05, 0.1, 0.2, 0.4][Math.floor(rnd() * 5)], T: 6 };
         var rb = rwSolve(st.parts, st.W, st.H, st.k, rcfg, rnd, st.best ? st.best.bins.length : 12);
         st.i++;
-        if (rb) { var ord = []; rb.forEach(function (b) { b.items.forEach(function (it) { ord.push(it.p); }); }); cand = { order: ord, cfg: withNoRot(st.combos[0], false), bins: rb, sc: scoreBins(rb, st.machine, st.trimOn, st.prio, st.polish) }; }
+        if (rb) { var ord = []; rb.forEach(function (b) { b.items.forEach(function (it) { ord.push(it.p); }); }); cand = { order: ord, cfg: withNoRot(st.combos[0], false), bins: rb, sc: scoreBins(rb, st.machine, st.trimOn, st.prio, st.polish, st.tidy) }; }
         else continue;
+      } else if (st.polish && st.tidy && st.machine === 'saw' && st.best && rnd() < 0.3) {
+        var sp = srStep(st, rnd);
+        st.i++;
+        if (sp && !st.elite.some(function (e) { return e.sc === sp.sc; })) { st.elite.unshift(sp); st.elite.length = Math.min(st.elite.length, 8); st.elite.sort(function (a, b) { return a.sc - b.sc; }); if (sp.sc < st.best.sc) { st.best = st.elite[0]; st.improved = true; st.polBest = st.best; } }
+        continue;
       } else if (st.polish && st.machine === 'saw' && st.best && rnd() < 0.5) {
         var cp = rnd() < 0.55 ? rebalanceStep(st, rnd) : compactStep(st, rnd);
         st.i++;
@@ -1279,7 +1419,7 @@ html { touch-action: manipulation; }
       return o;
     });
     if (bad || order.length !== st.parts.length) return false;
-    var sc = scoreBins(bins, st.machine, st.trimOn, st.prio, st.polish);
+    var sc = scoreBins(bins, st.machine, st.trimOn, st.prio, st.polish, st.tidy);
     var cand = { order: order, cfg: msg.cfg, bins: bins, sc: sc };
     if (st.elite.some(function (e) { return e.sc === sc; })) { st.sentSc = Math.min(st.sentSc, sc); return false; }
     if (st.elite.length >= 8 && sc >= st.elite[st.elite.length - 1].sc) return false;
@@ -1674,7 +1814,7 @@ html { touch-action: manipulation; }
       });
       var bins = [], algo = '', manualOn = false, sigH = '';
       if (W > 0 && H > 0 && fit.length) {
-        var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0]);
+        var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0].concat(s.remMode === 'edge' && s.mode === 'saw' ? [1] : []));
         sigH = sigHash(sig);
         var man = state.manual && state.manual[m.id];
         if (man && rebaseMat[m.id] && man.h !== sigH) {
@@ -1690,7 +1830,7 @@ html { touch-action: manipulation; }
         }
       }
       if (W > 0 && H > 0 && fit.length && !manualOn) {
-        var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big');
+        var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big', s.remMode === 'edge');
         st.matId = m.id;
         if (pendingLayout) {
           var pl = pendingLayout[m.id];
@@ -2041,7 +2181,7 @@ html { touch-action: manipulation; }
   $('#partSearch').addEventListener('input', applyPartFilter);
   $('#partSearch').addEventListener('keydown', function (e) { if (e.key === 'Escape') { this.value = ''; applyPartFilter(); } });
   function syncSettings() {
-    $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : state.s.trimSide === 'all2' ? 'all2' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
+    $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : state.s.trimSide === 'all2' ? 'all2' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#remMode').value = state.s.remMode === 'edge' ? 'edge' : 'cut'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
     document.querySelectorAll('input[name="mode"]').forEach(function (r) { r.checked = r.value === state.s.mode; });
   }
 
@@ -2061,7 +2201,7 @@ html { touch-action: manipulation; }
       if (m.cmd === 'init') seedSalt = m.salt;
       else if (m.cmd === 'jobs') {
         m.jobs.forEach(function (j) {
-          st = getSolver(j.sig, j.parts, j.W, j.H, j.k, j.machine, j.trimOn, j.prio, j.big); jobs[j.sig] = st;
+          st = getSolver(j.sig, j.parts, j.W, j.H, j.k, j.machine, j.trimOn, j.prio, j.big, j.tidy); jobs[j.sig] = st;
           if (!!st.polish !== !!j.polish) setPolish(st, j.polish);
         });
         active = m.active;
@@ -2117,7 +2257,7 @@ html { touch-action: manipulation; }
   function sendJobs(work) {
     if (!workers.length) return;
     var msg = { cmd: 'jobs', active: work.map(function (st) { return st.sig; }), jobs: activeSolvers.map(function (st) {
-      return { sig: st.sig, parts: st.parts, W: st.W, H: st.H, k: st.k, machine: st.machine, trimOn: st.trimOn, prio: st.prio, big: !!st.bigThr, polish: !!st.polish };
+      return { sig: st.sig, parts: st.parts, W: st.W, H: st.H, k: st.k, machine: st.machine, trimOn: st.trimOn, prio: st.prio, big: !!st.bigThr, tidy: !!st.tidy, polish: !!st.polish };
     }) };
     workers.forEach(function (w) { w.postMessage(msg); });
     activeSolvers.forEach(function (st) { st.sentSc = Infinity; sendBest(st); });
@@ -2350,6 +2490,7 @@ html { touch-action: manipulation; }
   $('#allRot').addEventListener('change', function (e) { state.s.allRot = e.target.checked; schedule(); });
   $('#prio').addEventListener('change', function (e) { state.s.prio = e.target.value; schedule(); });
   $('#strat').addEventListener('change', function (e) { state.s.strat = e.target.value; schedule(); });
+  $('#remMode').addEventListener('change', function (e) { state.s.remMode = e.target.value === 'edge' ? 'edge' : 'cut'; schedule(); });
   $('#edgeAdd').addEventListener('input', function (e) { state.s.edgeAdd = e.target.value === '' ? 0 : parseFloat(e.target.value); schedule(); });
   document.querySelectorAll('input[name="mode"]').forEach(function (r) {
     r.addEventListener('change', function () { if (r.checked) { state.s.mode = r.value; var kv = r.value === 'nest' ? 6 : 4; if (state.s.kerf === 4 || state.s.kerf === 6) { state.s.kerf = kv; $('#kerf').value = kv; } schedule(); } });
@@ -3127,7 +3268,7 @@ html { touch-action: manipulation; }
       if (shs.length) lk[id] = { sig: v.sig, sheets: shs };
     });
     var s = d.s || {};
-    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : s.trimSide === 'all2' ? 'all2' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, locked: lk, idMap: byOld };
+    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : s.trimSide === 'all2' ? 'all2' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', remMode: s.remMode === 'edge' ? 'edge' : 'cut', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, locked: lk, idMap: byOld };
   }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
@@ -3531,7 +3672,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '92';
+  var APP_VERSION = '93';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
