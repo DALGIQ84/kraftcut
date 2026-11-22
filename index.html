@@ -460,7 +460,7 @@ html { touch-action: manipulation; }
       </div>
       <div class="field"><label class="label" for="kerf">Ширина на разреза (мм)</label><input id="kerf" type="number" min="0" step="0.5" value="4"></div>
       <div class="field"><label class="label" for="trim">Обрезка по краищата (мм)</label><input id="trim" type="number" min="0" step="1" value="10"></div>
-      <div class="field"><label class="label" for="trimSide">Обрезка от</label><select id="trimSide"><option value="all">Всички четири страни</option><option value="two">Горе и ляво (както OptiCut)</option></select></div>
+      <div class="field"><label class="label" for="trimSide">Обрезка от</label><select id="trimSide"><option value="all">Всички четири страни</option><option value="all2">Всички четири страни, реже се от две</option><option value="two">Горе и ляво (както OptiCut)</option></select></div>
       <div class="field"><span class="label">Текстура</span><label class="check"><input id="allRot" type="checkbox"> Върти всички, без шарка</label></div>
       <div class="field"><label class="label" for="prio">Подреждане</label><select id="prio"><option value="balance">Баланс: остатък и рязане</option><option value="waste">Най-голям цял остатък</option><option value="cut">Най-къса дължина на рязане</option></select></div>
       <div class="field"><label class="label" for="strat" title="Автоматично: програмата сама избира реда за най-добър резултат. Големите първо: големите детайли се слагат с приоритет, а малките се намества след тях в останалото място. Може да са нужни повече листове.">Ред на слагане</label><select id="strat"><option value="auto">Автоматично (най-добро)</option><option value="big">Големите детайли първи</option></select></div>
@@ -659,7 +659,7 @@ html { touch-action: manipulation; }
   function defaults() {
     return {
       name: '',
-      s: { kerf: 4, trim: 10, trimSide: 'all', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
+      s: { kerf: 4, trim: 10, trimSide: 'all2', mode: 'saw', allRot: false, prio: 'balance', strat: 'auto', edgeAdd: 10 },
       materials: [],
       parts: [],
       manual: {},
@@ -1603,7 +1603,7 @@ html { touch-action: manipulation; }
     Object.keys(LK).forEach(function (mid) {
       var m0 = matById[mid], lk = LK[mid];
       if (!m0 || !lk || !lk.sheets || !lk.sheets.length) { delete LK[mid]; return; }
-      var tn0 = s.trimSide === 'two' ? 1 : 2, W0 = +m0.L - tn0 * trim, H0 = +m0.W - tn0 * trim;
+      var tn0 = s.trimSide === 'two' || s.trimSide === 'all2' ? 1 : 2, ta0 = s.trimSide === 'two' ? 1 : 2, W0 = +m0.L - ta0 * trim, H0 = +m0.W - ta0 * trim;
       if (lk.sig !== JSON.stringify([W0, H0, k, s.mode, trim > 0 ? tn0 : 0])) { delete LK[mid]; lockNotes.push('Заключените листове на „' + esc(m0.name) + '“ са отключени, защото размерът на листа или настройките за рязане са променени.'); save(); return; }
       lockPool[mid] = {}; lockEnt[mid] = lk.sheets.map(function (sh, si) {
         return sh.map(function (it, ii) { var en = { si: si, ii: ii, it: it, piece: null }; (lockPool[mid][lkey(it)] = lockPool[mid][lkey(it)] || []).push(en); return en; });
@@ -1667,7 +1667,7 @@ html { touch-action: manipulation; }
       var list = groups[m.id], lkm = LK[m.id] || null;
       if (!list) { if (!lkm) return; list = []; }
       var ML = +m.L, MW = +m.W;
-      var tn = s.trimSide === 'two' ? 1 : 2, W = ML - tn * trim, H = MW - tn * trim, fit = [], bad = [];
+      var tn = s.trimSide === 'two' || s.trimSide === 'all2' ? 1 : 2, ta = s.trimSide === 'two' ? 1 : 2, W = ML - ta * trim, H = MW - ta * trim, fit = [], bad = [];
       list.forEach(function (p) {
         var ok = (p.w <= W && p.h <= H) || (p.rot && p.h <= W && p.w <= H);
         (ok ? fit : bad).push(p);
@@ -1727,7 +1727,7 @@ html { touch-action: manipulation; }
       bins.forEach(function (b) { matUsed += b.used; matCut += b.cutLen || 0; });
       totalSheets += bins.length; usedArea += matUsed; boardArea += bins.length * ML * MW; totalCut += matCut;
       if (+m.price > 0) { anyPrice = true; cost += bins.length * +m.price; }
-      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0) + lockedItems, nLocked: nLocked, cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn, off: manualOn ? (bins.off || []) : [] });
+      res.push({ m: m, bins: bins, bad: bad, W: W, H: H, k: k, trim: trim, tn: tn, ta: ta, used: matUsed, count: list.reduce(function (a, p) { return a + (p.comp ? p.comp.length : 1); }, 0) + lockedItems, nLocked: nLocked, cut: matCut, edge: edgeByMat[m.id] || 0, algo: algo, fit: fit, sigH: sigH, manual: manualOn, off: manualOn ? (bins.off || []) : [] });
     });
     return { res: res, sheets: totalSheets, util: boardArea ? usedArea / boardArea : 0, edge: edgeLen, cost: anyPrice ? cost : null, pieces: partCount, mode: s.mode, cut: totalCut, notes: notes.concat(lockNotes) };
   }
@@ -1868,7 +1868,7 @@ html { touch-action: manipulation; }
     var ML = +g.m.L, MW = +g.m.W, t = g.trim, ins = Math.max(9, Math.round(ML / 200));
     var o = '<svg class="board" viewBox="0 0 ' + ML + ' ' + MW + '" role="img" aria-label="Схема на рязане">';
     o += '<rect class="boardfill" x="0" y="0" width="' + ML + '" height="' + MW + '"/>';
-    o += '<rect class="trimline" x="' + t + '" y="' + t + '" width="' + (ML - (g.tn || 2) * t) + '" height="' + (MW - (g.tn || 2) * t) + '"/>';
+    o += '<rect class="trimline" x="' + t + '" y="' + t + '" width="' + (ML - (g.ta || g.tn || 2) * t) + '" height="' + (MW - (g.ta || g.tn || 2) * t) + '"/>';
     bin.items.forEach(function (it) {
       var x = t + it.x, y = t + it.y;
       o += '<g data-tip="' + esc(tipText(it)) + '" style="--h:' + it.p.hue + '"><rect class="piece" x="' + x + '" y="' + y + '" width="' + it.w + '" height="' + it.h + '"/>';
@@ -2041,7 +2041,7 @@ html { touch-action: manipulation; }
   $('#partSearch').addEventListener('input', applyPartFilter);
   $('#partSearch').addEventListener('keydown', function (e) { if (e.key === 'Escape') { this.value = ''; applyPartFilter(); } });
   function syncSettings() {
-    $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
+    $('#kerf').value = state.s.kerf; $('#trim').value = state.s.trim; $('#trimSide').value = state.s.trimSide === 'two' ? 'two' : state.s.trimSide === 'all2' ? 'all2' : 'all'; $('#allRot').checked = !!state.s.allRot; $('#prio').value = state.s.prio || 'balance'; $('#strat').value = state.s.strat === 'big' ? 'big' : 'auto'; $('#edgeAdd').value = state.s.edgeAdd == null ? 10 : state.s.edgeAdd;
     document.querySelectorAll('input[name="mode"]').forEach(function (r) { r.checked = r.value === state.s.mode; });
   }
 
@@ -3127,7 +3127,7 @@ html { touch-action: manipulation; }
       if (shs.length) lk[id] = { sig: v.sig, sheets: shs };
     });
     var s = d.s || {};
-    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, locked: lk, idMap: byOld };
+    return { name: String(d.name || ''), s: { kerf: isNaN(+s.kerf) || s.kerf === '' ? 4 : +s.kerf, trim: isNaN(+s.trim) || s.trim === '' ? 10 : +s.trim, trimSide: s.trimSide === 'two' ? 'two' : s.trimSide === 'all2' ? 'all2' : 'all', mode: s.mode === 'saw' ? 'saw' : 'nest', allRot: !!s.allRot, prio: ['waste', 'cut'].indexOf(s.prio) >= 0 ? s.prio : 'balance', strat: s.strat === 'big' ? 'big' : 'auto', edgeAdd: (s.edgeAdd === '' || s.edgeAdd == null || isNaN(+s.edgeAdd)) ? 10 : +s.edgeAdd }, materials: mats, parts: parts, manual: man, locked: lk, idMap: byOld };
   }
   function applyAll() {
     $('#projName').value = state.name || ''; syncSettings(); renderMats(); renderParts(); run(450);
@@ -3531,7 +3531,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '91';
+  var APP_VERSION = '92';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
