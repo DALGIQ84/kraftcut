@@ -1372,8 +1372,8 @@ html { touch-action: manipulation; }
     return bad ? null : bn;
   }
   // Подреждане на един лист „редове от горе → остатък най-долу“; взима се само ако е по-добро по оценката.
-  function srStep(st, rnd, force) {
-    var base = st.best, bins = base.bins, n = bins.length;
+  function srStep(st, rnd, force, baseArg) {
+    var base = baseArg || st.best, bins = base.bins, n = bins.length;
     if (n < 1) return false;
     var bi = Math.floor(rnd() * n), sub;
     if (n > 1 && (force || rnd() < 0.5)) { // най-празният лист (последният) се подрежда най-често: там пръснатият остатък се вижда най-силно
@@ -1450,6 +1450,23 @@ html { touch-action: manipulation; }
     }
   }
   // Показва се по-доброто от двете: най-малко листове, а при същия брой - по-малко рязане и по-събран остатък.
+  // Последна проверка: най-празният лист да е с остатък в една ивица. Работи върху крайния резултат и е бърза (детерминирана).
+  function tidyLast(st, c) {
+    if (!c || !(st.tidy & 1) || st.machine !== 'saw' || c.bins.length < 2) return c;
+    var rnd = makeRng(777), best = c, bsc = scoreBins(c.bins, st.machine, st.trimOn, st.prio, true, st.tidy), t0 = performance.now(), k;
+    for (k = 0; k < 12 && performance.now() - t0 < 1500; k++) {
+      var r = srStep(st, rnd, true, c);
+      if (r && r.sc < bsc) { best = r; bsc = r.sc; }
+    }
+    return best;
+  }
+  function tidyFinish(list) {
+    list.forEach(function (st) {
+      if (st.frozen || !(st.tidy & 1) || !st.best) return;
+      var c = shown(st), r = tidyLast(st, c);
+      if (r !== c) { st.best = r; st.polBest = r; }
+    });
+  }
   function shown(st) { return st.polBest && st.best && st.polBest.bins.length <= st.best.bins.length ? st.polBest : st.best; }
   // Обмен на резултати между ядрата: подреждането се предава като числа, а детайлите се свързват по номер.
   function serCand(st, c) {
@@ -2392,7 +2409,7 @@ html { touch-action: manipulation; }
       var el = performance.now() - t0, close = lv.some(nearLB);
       var lim = close ? Math.max(totalMs, 40000) : totalMs;
       prog.textContent = 'Опитани подреждания: ' + fmt(totalTried()) + (workers.length ? ' · ядра: ' + (workers.length + 1) : '') + (el < lim ? (close && el >= totalMs ? ' · опитвам да спестя лист…' : ' · търся по-добро…') : ' · показано е най-доброто');
-      if (el < lim) setTimeout(tick, 0); else { setDeepBusy(false); haltWorkers(); if (notify) signalDone(); }
+      if (el < lim) setTimeout(tick, 0); else { haltWorkers(); tidyFinish(activeSolvers); render(compute(0)); setDeepBusy(false); if (notify) signalDone(); }
     }
     setDeepBusy(true);
     setTimeout(tick, 30);
@@ -3741,7 +3758,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '98';
+  var APP_VERSION = '99';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
