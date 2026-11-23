@@ -177,6 +177,11 @@ td select { min-width: 140px; }
 .stat b { font-family: var(--font-mono); font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; }
 .stat small { color: var(--muted); font-size: 12px; }
 
+.mtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; padding: 8px 0 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 5; }
+.mtab { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); cursor: pointer; min-height: 40px; }
+.mtab .mtn { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-left: 4px; }
+.mtab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.mtab.on .mtn { color: var(--accent-ink); }
 .matblock { display: flex; flex-direction: column; gap: 14px; }
 .mathead { display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap; }
 .sheetgrid { display: grid; grid-template-columns: 1fr; gap: 16px; }
@@ -1506,7 +1511,7 @@ html { touch-action: manipulation; }
   }
 
   /* ---------- Изчисление ---------- */
-  var lastResult = null, activeSolvers = [];
+  var lastResult = null, activeSolvers = [], resTab = 'all';
   var ALGO = { mr: 'свободно подреждане', gl: 'гилотина', st: 'ленти и колони' };
   // Ред на рязане: дърво от пълни срезове (както реже трион). Връща номерирани срезове по лентите, ниво по ниво.
   // Завъртания: колко пъти се сменя посоката на срезовете по реда на рязане (толкова пъти се обръща листът/лентата).
@@ -2097,8 +2102,14 @@ html { touch-action: manipulation; }
     h += '</div>';
     h += '<div class="legend" style="margin-top:12px"><span><i></i>кантирана страна</span><span><u></u>обрезка по ръба</span><span>Пунктирана рамка с размер = остатък.</span><span><b class="grplg"></b>дебела прекъсната рамка = група (шарката продължава от чело на чело)</span><span>В детайла е видът му (името) и размерът дължина × ширина. Ако името не се събира, е съкратено.</span></div>';
 
+    if (resTab !== 'all' && !r.res.some(function (g) { return String(g.m.id) === resTab; })) resTab = 'all';
+    if (r.res.length > 1) {
+      h += '<div class="mtabs" role="tablist"><button type="button" role="tab" class="mtab' + (resTab === 'all' ? ' on' : '') + '" data-mt="all">Всички <span class="mtn">' + r.sheets + '</span></button>';
+      r.res.forEach(function (g) { h += '<button type="button" role="tab" class="mtab' + (resTab === String(g.m.id) ? ' on' : '') + '" data-mt="' + esc(String(g.m.id)) + '">' + esc(g.m.name) + ' <span class="mtn">' + g.bins.length + '</span></button>'; });
+      h += '</div>';
+    }
     r.res.forEach(function (g, gi) {
-      h += '<div class="matblock" style="margin-top:22px"><div class="mathead"><h3>' + esc(g.m.name) + '</h3><span class="hint mono">' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм · ' + g.bins.length + ' ' + (g.bins.length === 1 ? 'лист' : 'листа') + ' · ' + g.count + ' детайла · ' + (g.m.noGrain ? 'без шарка, детайлите се въртят' : 'по шарката') + (g.algo ? ' · подредба: ' + ALGO[g.algo] : '') + (g.manual ? ' · <b>ръчна подредба</b>' : '') + '</span>' + (g.manual ? '<button type="button" class="fsbtn" data-auto="' + gi + '">Върни автоматичната</button>' : '') + '</div>';
+      h += '<div class="matblock" data-mid="' + esc(String(g.m.id)) + '" style="margin-top:22px"><div class="mathead"><h3>' + esc(g.m.name) + '</h3><span class="hint mono">' + fmt(g.m.L) + '×' + fmt(g.m.W) + ' мм · ' + g.bins.length + ' ' + (g.bins.length === 1 ? 'лист' : 'листа') + ' · ' + g.count + ' детайла · ' + (g.m.noGrain ? 'без шарка, детайлите се въртят' : 'по шарката') + (g.algo ? ' · подредба: ' + ALGO[g.algo] : '') + (g.manual ? ' · <b>ръчна подредба</b>' : '') + '</span>' + (g.manual ? '<button type="button" class="fsbtn" data-auto="' + gi + '">Върни автоматичната</button>' : '') + '</div>';
       var opw = offPieces(g);
       if (opw.length) h += '<div class="offwarn">⚠ Извън листа (не са в разкроя): ' + opw.map(function (q) { return esc(q.name) + ' ' + fmt(q.L) + '×' + fmt(q.W); }).join(' · ') + '</div>';
       h += '<div class="sheetgrid' + (g.bins.length > 1 ? '' : '') + '">';
@@ -2125,8 +2136,18 @@ html { touch-action: manipulation; }
     });
     h += '</tbody><tfoot><tr><td>Общо</td><td></td><td class="r mono"><b>' + tN + '</b></td><td class="r mono">' + fmt(tA, 2) + '</td><td></td><td class="r mono">' + fmt(tE, 1) + '</td><td class="r mono"><b>' + fmt(tEA, 1) + '</b></td>' + (anyC ? '<td class="r mono">' + fmt(tC, 2) + '</td>' : '') + '</tr></tfoot></table></div></section>';
     out.innerHTML = h;
+    applyResTab();
     var two = out.querySelectorAll('.sheetgrid');
     two.forEach(function (gr) { if (gr.children.length > 1) gr.classList.add('two'); });
+  }
+
+  // Табове в „Резултат“: „Всички“ или само един материал — без скролване през всички листове.
+  function applyResTab() {
+    var out = $('#out'), tb = document.querySelector('.topbar'), bar = out.querySelector('.mtabs');
+    if (bar && tb) bar.style.top = tb.offsetHeight + 'px';
+    out.querySelectorAll('.mtab').forEach(function (b) { var on = b.dataset.mt === resTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    out.querySelectorAll('.matblock').forEach(function (b) { b.style.display = (resTab === 'all' || b.dataset.mid === resTab) ? '' : 'none'; });
+    var od = out.querySelector('section.order'); if (od) od.style.display = resTab === 'all' ? '' : 'none';
   }
 
   function reportText() {
@@ -2657,6 +2678,8 @@ html { touch-action: manipulation; }
     save(); try { run(350); } finally { rebaseMat = {}; }
   }
   $('#out').addEventListener('click', function (e) {
+    var mt = e.target.closest('button[data-mt]');
+    if (mt) { resTab = mt.dataset.mt; applyResTab(); var bb = $('#out').querySelector('.mtabs'); if (bb && bb.getBoundingClientRect().top < 0) bb.scrollIntoView(); return; }
     var lb = e.target.closest('button[data-lock]');
     if (lb) { var lp = lb.dataset.lock.split('-'); toggleLock(+lp[0], +lp[1]); return; }
     var b = e.target.closest('button[data-fs]');
@@ -3711,7 +3734,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '96';
+  var APP_VERSION = '97';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
