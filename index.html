@@ -910,9 +910,11 @@ html { touch-action: manipulation; }
     bins.forEach(function (b) { var f = b.used / area0; sumFr += f; sq += f * f; });
     if (!polish && bins.length > Math.ceil(sumFr - 1e-9)) return bins.length * 1e12 - sq * 1e10 + cut / 1e3;
     var remPen = 0;
+    var emp = null;
+    if (tidy & 1) bins.forEach(function (b) { if (!emp || b.used < emp.used) emp = b; });
     if (polish && machine === 'saw') bins.forEach(function (b) {
       var ar = b.W * b.H;
-      if (tidy & 1) { var er = maxEdgeRect(b); remPen += 40000 * (1 - er / ar) + 15000 * Math.max(0, ar - b.used - er) / ar ; }
+      if (tidy & 1) { var er = maxEdgeRect(b), wl = b === emp && bins.length > 1 ? 2.5 : 1; remPen += wl * (40000 * (1 - er / ar) + 15000 * Math.max(0, ar - b.used - er) / ar); }
       else remPen += 40000 * (1 - maxEmptyRect(b) / ar);
     });
     var bandPen = 0;
@@ -1370,10 +1372,14 @@ html { touch-action: manipulation; }
     return bad ? null : bn;
   }
   // Подреждане на един лист „редове от горе → остатък най-долу“; взима се само ако е по-добро по оценката.
-  function srStep(st, rnd) {
+  function srStep(st, rnd, force) {
     var base = st.best, bins = base.bins, n = bins.length;
     if (n < 1) return false;
-    var bi = Math.floor(rnd() * n), sub = bins[bi].items.map(function (it) { return it.p; });
+    var bi = Math.floor(rnd() * n), sub;
+    if (n > 1 && (force || rnd() < 0.5)) { // най-празният лист (последният) се подрежда най-често: там пръснатият остатък се вижда най-силно
+      bi = 0; for (var q = 1; q < n; q++) if (bins[q].used < bins[bi].used) bi = q;
+    }
+    sub = bins[bi].items.map(function (it) { return it.p; });
     if (sub.length < 2 || sub.length > 120) return false;
     var tv = dirVert(st.tidy, st.W, st.H), sp = sub;
     if (tv) sp = sub.map(function (p) { return { w: p.h, h: p.w, rot: p.rot }; });
@@ -1406,8 +1412,9 @@ html { touch-action: manipulation; }
         st.i++;
         if (rb) { var ord = []; rb.forEach(function (b) { b.items.forEach(function (it) { ord.push(it.p); }); }); cand = { order: ord, cfg: withNoRot(st.combos[0], false), bins: rb, sc: scoreBins(rb, st.machine, st.trimOn, st.prio, st.polish, st.tidy) }; }
         else continue;
-      } else if (st.polish && st.tidy && st.machine === 'saw' && st.best && rnd() < 0.3) {
-        var sp = srStep(st, rnd);
+      } else if (st.polish && st.tidy && st.machine === 'saw' && st.best && ((st.tidyN | 0) < 4 || rnd() < 0.3)) {
+        var frc = (st.tidyN | 0) < 4; st.tidyN = (st.tidyN | 0) + 1;
+        var sp = srStep(st, rnd, frc);
         st.i++;
         if (sp && !st.elite.some(function (e) { return e.sc === sp.sc; })) { st.elite.unshift(sp); st.elite.length = Math.min(st.elite.length, 8); st.elite.sort(function (a, b) { return a.sc - b.sc; }); if (sp.sc < st.best.sc) { st.best = st.elite[0]; st.improved = true; st.polBest = st.best; } }
         continue;
@@ -3734,7 +3741,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '97';
+  var APP_VERSION = '98';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
