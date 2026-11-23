@@ -2631,7 +2631,9 @@ html { touch-action: manipulation; }
         if (found) sizeSeen[found.id] = 1;
         mat = found;
       }
-      var dir = /върт|free|rot/i.test(rotTxt) ? 'rot' : /шарк|fix|grain/i.test(rotTxt) ? 'fix' : 'auto';
+      var rt = rotTxt.trim().toLowerCase(), dir;
+      if (mat && (rt === 'шарка' || rt === 'върти')) { mat.noGrain = rt === 'върти'; dir = 'auto'; } // от KRAFTPLAN: шарката е на материала (отметка „Шарка“ в библиотеката)
+      else dir = /върт|free|rot/i.test(rotTxt) ? 'rot' : /шарк|fix|grain/i.test(rotTxt) ? 'fix' : 'auto';
       state.parts.push({ name: name, L: L, W: W, q: q > 0 ? Math.floor(q) : 1, mat: mat.id, dir: dir, grp: grpTxt.slice(0, 10), row: (parseInt(rowNoTxt, 10) >= 1 && parseInt(rowNoTxt, 10) <= 8) ? String(parseInt(rowNoTxt, 10)) : '', note: noteTxt.slice(0, 120), e: e });
       added++;
     });
@@ -3758,7 +3760,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '99';
+  var APP_VERSION = '100';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
