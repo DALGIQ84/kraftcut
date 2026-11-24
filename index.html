@@ -1578,13 +1578,28 @@ html { touch-action: manipulation; }
       }
       // Първо обрезките в посоката, която не е на разделянето (при единичен детайл - в посоката на предишния срез).
       var vFirst = ax ? ax !== 'x' : (last ? last === 'x' : true);
+      // Когато има обрезка и вдясно, и отдолу, първият срез е този, който не разрязва големия остатък:
+      // иначе линията минава през целия остатък и той се разпада на две парчета.
+      var rw = r.x1 - bb.x1, bh = r.y1 - bb.y1;
+      if (rw > 1 && bh > 1) {
+        var lw = Math.max(0, bb.x1 - r.x0), th = Math.max(0, bb.y1 - r.y0), fw = r.x1 - r.x0, fh = r.y1 - r.y0;
+        var bigV = Math.max(rw * fh, lw * bh), bigH = Math.max(fw * bh, rw * th);
+        if (bigV > bigH * 1.02) vFirst = true; else if (bigH > bigV * 1.02) vFirst = false;
+      }
+      // Остатъкът в края на посоката на ивиците се отрязва последен: ивиците се режат една след друга от горния ляв ъгъл,
+      // а остатъкът е това, което остава накрая (както реже майсторът). Първо се отрязва само това, което иначе би разрязало остатъка.
+      var postR = false, postB = false;
+      if (gs) {
+        if (ax === 'y') postB = bh > 1 && (rw <= 1 || vFirst);
+        else postR = rw > 1 && (bh <= 1 || !vFirst);
+      }
       function trimsV() {
         if (bb.x0 - r.x0 > 1) { vcut(bb.x0 - k / 2, r); r.x0 = bb.x0; }
-        if (r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
+        if (!postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
       }
       function trimsH() {
         if (bb.y0 - r.y0 > 1) { hcut(bb.y0 - k / 2, r); r.y0 = bb.y0; }
-        if (r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
+        if (!postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
       }
       if (vFirst) { trimsV(); trimsH(); } else { trimsH(); trimsV(); }
       if (!gs) return;
@@ -1594,6 +1609,8 @@ html { touch-action: manipulation; }
         if (ax === 'x') vcut(hi + k / 2, r); else hcut(hi + k / 2, r);
         if (nlo - hi > k + 1) { if (ax === 'x') vcut(nlo - k / 2, r); else hcut(nlo - k / 2, r); }
       }
+      if (postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
+      if (postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
       for (i = 0; i < gs.length; i++) {
         var lo = ax === 'x' ? bbs[i].x0 : bbs[i].y0, hh = ax === 'x' ? bbs[i].x1 : bbs[i].y1;
         walk(gs[i], ax === 'x' ? { x0: lo, x1: hh, y0: r.y0, y1: r.y1 } : { x0: r.x0, x1: r.x1, y0: lo, y1: hh }, ax, depth + 1);
@@ -3760,7 +3777,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '101';
+  var APP_VERSION = '102';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
