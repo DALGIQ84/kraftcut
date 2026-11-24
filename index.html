@@ -2106,8 +2106,14 @@ html { touch-action: manipulation; }
         var x1 = c.v ? c.x : c.a, y1 = c.v ? c.a : c.y, x2 = c.v ? c.x : c.b, y2 = c.v ? c.b : c.y;
         o += '<line class="cutline" x1="' + (t + x1) + '" y1="' + (t + y1) + '" x2="' + (t + x2) + '" y2="' + (t + y2) + '"/>';
       });
+      var placed = [];
       cutPlan(bin).forEach(function (c) {
-        var bx = c.v ? c.x : c.a + rr * 1.2, by = c.v ? c.a + rr * 1.2 : c.y;
+        var bx = c.v ? c.x : c.a + rr * 1.2, by = c.v ? c.a + rr * 1.2 : c.y, tries = 0;
+        // Номерата не се застъпват: ако кръгчето е върху друго, се плъзга по линията си, а по-малкият номер остава на мястото си.
+        function hit() { return placed.some(function (p) { return Math.abs(p[0] - bx) < rr * 2.1 && Math.abs(p[1] - by) < rr * 2.1; }); }
+        while (hit() && tries < 8) { tries++; if (c.v) by += rr * 2.2; else bx += rr * 2.2; }
+        if (tries >= 8 || (c.v ? by > c.b : bx > c.b)) { bx = c.v ? c.x : c.a + rr * 1.2; by = c.v ? c.a + rr * 1.2 : c.y; }
+        placed.push([bx, by]);
         o += '<g class="cutbadge"><circle cx="' + (t + bx) + '" cy="' + (t + by) + '" r="' + rr + '"/><text x="' + (t + bx) + '" y="' + (t + by + fs * 0.35) + '" font-size="' + fs.toFixed(1) + '">' + c.n + '</text></g>';
       });
     }
@@ -3780,7 +3786,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '104';
+  var APP_VERSION = '105';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
