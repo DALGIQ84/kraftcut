@@ -919,7 +919,7 @@ html { touch-action: manipulation; }
     });
     var bandPen = 0;
     if (polish && machine === 'saw' && tidy & 6) { var dv = dirVert(tidy, bins[0] ? bins[0].W : 1, bins[0] ? bins[0].H : 1); bins.forEach(function (b) { if (!rowBanded(b, dv)) bandPen += 30000; }); }
-    var s2 = polish && prio !== 'waste' ? cut + remPen + (machine === 'saw' ? minFrac * 40000 + minN * 200 : 0) : prio === 'waste' ? -rem / 1e3 + cut / 1e6 + minFrac * 1e3 : prio === 'cut' ? cut - rem / 1e6 + minFrac * 1e3 : cut / 1e3 - 4 * rem / 1e6 + 15 * minFrac;
+    var s2 = polish && prio !== 'waste' ? cut + remPen + (machine === 'saw' ? minFrac * 8000000 + minN * 200 : 0) : prio === 'waste' ? -rem / 1e3 + cut / 1e6 + minFrac * 1e3 : prio === 'cut' ? cut - rem / 1e6 + minFrac * 1e3 : cut / 1e3 - 4 * rem / 1e6 + 15 * minFrac;
     return bins.length * 1e12 + s2 + bandPen;
   }
 
@@ -1451,6 +1451,60 @@ html { touch-action: manipulation; }
   }
   // Показва се по-доброто от двете: най-малко листове, а при същия брой - по-малко рязане и по-събран остатък.
   // Последна проверка: най-празният лист да е с остатък в една ивица. Работи върху крайния резултат и е бърза (детерминирана).
+  // „Остатъкът първо“: най-празният лист се изпразва колкото е възможно - детайл от него се опитва да влезе в друг лист
+  // (той се подрежда наново заедно с детайла). Така последният лист има най-малко детайли, а остатъкът му е най-цял.
+  // Позволено е малко повече рязане (общо до 9 м за целия материал); ако листът се изпразни докрай, отпада цял лист.
+  function squeezeLast(st, c) {
+    if (!c || !(st.tidy & 1) || st.machine !== 'saw' || c.bins.length < 2) return c;
+    var rnd = makeRng(4242), t0 = performance.now(), cur = c, moved = true, spent = 0, BUDGET = 9000;
+    var tv = dirVert(st.tidy, st.W, st.H), LW = tv ? st.H : st.W, LH = tv ? st.W : st.H;
+    function pack(parts) {
+      var sp = tv ? parts.map(function (p) { return { w: p.h, h: p.w, rot: p.rot }; }) : parts;
+      var res = srSolve(sp, LW, LH, st.k, rnd, Math.min(40000, 5000 + parts.length * 1200));
+      if (!res) return null;
+      var nb = srBuild(res, sp, LW, LH, st.k);
+      if (!nb) return null;
+      if (tv) {
+        var sw2 = function (r) { return { x: r.y, y: r.x, w: r.h, h: r.w }; };
+        nb.W = st.W; nb.H = st.H;
+        nb.items = nb.items.map(function (it) { return { p: parts[sp.indexOf(it.p)], x: it.y, y: it.x, w: it.h, h: it.w, r: it.r }; });
+        nb.rects = nb.rects.map(sw2); nb.free = nb.free.map(sw2);
+        nb.cfg = { algo: 'st', vert: true, pref: 1, shelfOri: 'short', noRot: false };
+      }
+      return nb;
+    }
+    function sumCut(list) { var t = 0; list.forEach(function (b) { t += b.cutLen || 0; }); return t; }
+    scoreBins(cur.bins, st.machine, st.trimOn, st.prio, true, st.tidy);
+    while (moved && performance.now() - t0 < 4000) {
+      moved = false;
+      var bins = cur.bins, bi = 0, q;
+      for (q = 1; q < bins.length; q++) if (bins[q].used < bins[bi].used) bi = q;
+      var E = bins[bi], its = E.items.slice().sort(function (a, b) { return a.p.w * a.p.h - b.p.w * b.p.h; }), cut0 = sumCut(bins);
+      for (var ii = 0; ii < its.length && !moved && performance.now() - t0 < 4000; ii++) {
+        var mv = its[ii], pa = mv.p.w * mv.p.h, order = [];
+        bins.forEach(function (b, j) { if (j !== bi && b.W * b.H - b.used >= pa) order.push(j); });
+        order.sort(function (a, b) { return (bins[b].W * bins[b].H - bins[b].used) - (bins[a].W * bins[a].H - bins[a].used); });
+        for (var oj = 0; oj < order.length && !moved; oj++) {
+          var bj = order[oj], B = bins[bj];
+          var nb = pack(B.items.map(function (it) { return it.p; }).concat([mv.p]));
+          if (!nb) continue;
+          var rest = E.items.filter(function (it) { return it !== mv; }).map(function (it) { return it.p; }), ne = null;
+          if (rest.length) { ne = pack(rest); if (!ne) continue; }
+          var all = [];
+          bins.forEach(function (b, j) { if (j === bj) all.push(nb); else if (j === bi) { if (ne) all.push(ne); } else all.push(b); });
+          var sc = scoreBins(all, st.machine, st.trimOn, st.prio, true, st.tidy), dcut = sumCut(all) - cut0;
+          if (!ne || spent + dcut <= BUDGET) {
+            var ord = [];
+            all.forEach(function (b) { b.items.forEach(function (it) { ord.push(it.p); }); });
+            cur = { order: ord, cfg: cur.cfg, bins: all, sc: sc };
+            spent += Math.max(0, dcut); moved = true;
+          }
+        }
+      }
+      if (!moved) scoreBins(cur.bins, st.machine, st.trimOn, st.prio, true, st.tidy);
+    }
+    return cur;
+  }
   function tidyLast(st, c) {
     if (!c || !(st.tidy & 1) || st.machine !== 'saw' || c.bins.length < 2) return c;
     var rnd = makeRng(777), best = c, bsc = scoreBins(c.bins, st.machine, st.trimOn, st.prio, true, st.tidy), t0 = performance.now(), k;
@@ -1463,7 +1517,7 @@ html { touch-action: manipulation; }
   function tidyFinish(list) {
     list.forEach(function (st) {
       if (st.frozen || !(st.tidy & 1) || !st.best) return;
-      var c = shown(st), r = tidyLast(st, c);
+      var c = shown(st), r = tidyLast(st, squeezeLast(st, c));
       if (r !== c) { st.best = r; st.polBest = r; }
     });
   }
@@ -3786,7 +3840,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '105';
+  var APP_VERSION = '106';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
