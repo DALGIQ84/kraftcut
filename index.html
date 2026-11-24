@@ -1826,7 +1826,7 @@ html { touch-action: manipulation; }
         edgeLen += el; edgeByMat[mid] = (edgeByMat[mid] || 0) + el;
         var tgt = groups[mid] = groups[mid] || [];
         if (gk) { tgt = gset[mid + '|' + gk]; if (!tgt) { tgt = gset[mid + '|' + gk] = []; gorder.push({ mid: mid, gk: gk, list: tgt }); } }
-        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', note: String(p.note || '').trim(), w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: (pi * 53 + 190) % 360 };
+        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', note: String(p.note || '').trim(), w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: Math.round(85 + ((pi * 53 + 190) % 360) * 280 / 360) % 360 }; // без жълто-бежави тонове (10°–85°): да не се бъркат с остатъка (цвят на плочата)
         pend.push({ pc: pc, tgt: tgt, mid: mid, key: lkey({ name: pc.name, L: L, W: Wd, e: e, gk: gk }) });
       }
       partCount += q;
@@ -3760,7 +3760,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '100';
+  var APP_VERSION = '101';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
