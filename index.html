@@ -1590,17 +1590,19 @@ html { touch-action: manipulation; }
       // а остатъкът е това, което остава накрая (както реже майсторът). Първо се отрязва само това, което иначе би разрязало остатъка.
       var postR = false, postB = false;
       // Тънка ивица (под 150 мм) не е остатък за ползване: тя се отрязва след ивиците, за да е номер 1 горе вляво.
+      // Тънката ивица не се реже с отделен срез през всички ивици: всяка ивица си отрязва края при последния детайл.
+      var skipR = false, skipB = false;
       if (gs) {
-        if (ax === 'y') { postR = rw > 1 && rw < 150; postB = bh > 1 && (rw <= 1 || vFirst || postR); }
-        else { postB = bh > 1 && bh < 150; postR = rw > 1 && (bh <= 1 || !vFirst || postB); }
+        if (ax === 'y') { skipR = rw > 1 && rw < 150; postB = bh > 1 && (rw <= 1 || vFirst || skipR); }
+        else { skipB = bh > 1 && bh < 150; postR = rw > 1 && (bh <= 1 || !vFirst || skipB); }
       }
       function trimsV() {
         if (bb.x0 - r.x0 > 1) { vcut(bb.x0 - k / 2, r); r.x0 = bb.x0; }
-        if (!postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
+        if (!postR && !skipR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
       }
       function trimsH() {
         if (bb.y0 - r.y0 > 1) { hcut(bb.y0 - k / 2, r); r.y0 = bb.y0; }
-        if (!postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
+        if (!postB && !skipB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
       }
       if (vFirst) { trimsV(); trimsH(); } else { trimsH(); trimsV(); }
       if (!gs) return;
@@ -1610,13 +1612,8 @@ html { touch-action: manipulation; }
         if (ax === 'x') vcut(hi + k / 2, r); else hcut(hi + k / 2, r);
         if (nlo - hi > k + 1) { if (ax === 'x') vcut(nlo - k / 2, r); else hcut(nlo - k / 2, r); }
       }
-      if (ax === 'y') {
-        if (postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
-        if (postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
-      } else {
-        if (postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
-        if (postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
-      }
+      if (postB && r.y1 - bb.y1 > 1) { hcut(bb.y1 + k / 2, r); r.y1 = bb.y1; }
+      if (postR && r.x1 - bb.x1 > 1) { vcut(bb.x1 + k / 2, r); r.x1 = bb.x1; }
       for (i = 0; i < gs.length; i++) {
         var lo = ax === 'x' ? bbs[i].x0 : bbs[i].y0, hh = ax === 'x' ? bbs[i].x1 : bbs[i].y1;
         walk(gs[i], ax === 'x' ? { x0: lo, x1: hh, y0: r.y0, y1: r.y1 } : { x0: r.x0, x1: r.x1, y0: lo, y1: hh }, ax, depth + 1);
@@ -3783,7 +3780,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '103';
+  var APP_VERSION = '104';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
