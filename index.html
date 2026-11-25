@@ -1960,7 +1960,7 @@ html { touch-action: manipulation; }
         edgeLen += el; edgeByMat[mid] = (edgeByMat[mid] || 0) + el;
         var tgt = groups[mid] = groups[mid] || [];
         if (gk) { tgt = gset[mid + '|' + gk]; if (!tgt) { tgt = gset[mid + '|' + gk] = []; gorder.push({ mid: mid, gk: gk, list: tgt }); } }
-        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', note: String(p.note || '').trim(), w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: Math.round(85 + ((pi * 53 + 190) % 360) * 280 / 360) % 360 }; // без жълто-бежави тонове (10°–85°): да не се бъркат с остатъка (цвят на плочата)
+        var pc = { n: n, grp: gk, rowNo: parseInt(p.row, 10) || 0, name: p.name || 'Детайл', note: String(p.note || '').trim(), w: L, h: Wd, L: L, W: Wd, rot: (s.allRot || p.dir === 'rot') ? true : p.dir === 'fix' ? false : !!(matById[mid] && matById[mid].noGrain), e: e, hue: Math.round(85 + ((pi * 53 + 190) % 360) * 280 / 360) % 360, hue0: (pi * 53 + 190) % 360 }; // без жълто-бежави тонове (10°–85°): да не се бъркат с остатъка (цвят на плочата)
         pend.push({ pc: pc, tgt: tgt, mid: mid, key: lkey({ name: pc.name, L: L, W: Wd, e: e, gk: gk }) });
       }
       partCount += q;
@@ -1997,7 +1997,7 @@ html { touch-action: manipulation; }
       var th = oy - k;
       saw += (keys.length - 1) * mw;
       nest -= 2 * (mw + th);
-      out.push({ n: g.list[0].n, name: 'Група ' + g.gk + ' (' + g.list.length + ' детайла)', w: mw, h: th, L: mw, W: th, rot: false, e: [0, 0, 0, 0], hue: g.list[0].hue, comp: g.list, gk: g.gk, sawExtra: saw, nestExtra: Math.max(0, nest) });
+      out.push({ n: g.list[0].n, name: 'Група ' + g.gk + ' (' + g.list.length + ' детайла)', w: mw, h: th, L: mw, W: th, rot: false, e: [0, 0, 0, 0], hue: g.list[0].hue, hue0: g.list[0].hue0, comp: g.list, gk: g.gk, sawExtra: saw, nestExtra: Math.max(0, nest) });
     });
     var res = [], totalSheets = 0, usedArea = 0, boardArea = 0, cost = 0, anyPrice = false, totalCut = 0, notes = [];
     activeSolvers = [];
@@ -2013,9 +2013,13 @@ html { touch-action: manipulation; }
       var bins = [], algo = '', manualOn = false, sigH = '';
       if (W > 0 && H > 0 && fit.length) {
         var cdr = cutDirOf(s), tmask = s.mode === 'saw' ? (s.remMode === 'edge' ? 1 : 0) | (cdr === 'long' ? 2 : cdr === 'short' ? 4 : 0) : 0;
-        var sig = JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0].concat(s.mode === 'saw' && tmask ? [tmask === 3 ? 1 : 'm' + tmask] : []));
+        function mkSig(old) {
+          return JSON.stringify([fit.map(function (p) { return [p.n, p.name, p.w, p.h, p.rot ? 1 : 0, p.e, old ? p.hue0 : p.hue, p.comp ? p.comp.map(function (m) { return [m.n, m.name, m.w, m.h, m.e, old ? m.hue0 : m.hue, m.ox, m.oy]; }) : 0]; }), W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big' ? 1 : 0].concat(s.mode === 'saw' && tmask ? [tmask === 3 ? 1 : 'm' + tmask] : []));
+        }
+        var sig = mkSig(false), legacyH = sigHash(mkSig(true)); // до v100 цветът на детайла беше в подписа: старите файлове се разпознават и по него
         sigH = sigHash(sig);
         var man = state.manual && state.manual[m.id];
+        if (man && man.h === legacyH && man.h !== sigH) man.h = sigH;
         if (man && rebaseMat[m.id] && man.h !== sigH) {
           var have = {}; fit.forEach(function (q) { if (q.comp) q.comp.forEach(function (x) { have[x.n] = 1; }); else have[q.n] = 1; });
           man.sheets = (man.sheets || []).map(function (sh) { return (sh || []).filter(function (o) { return have[o.n]; }); }).filter(function (sh) { return sh.length; });
@@ -2043,7 +2047,7 @@ html { touch-action: manipulation; }
         }
         if (pendingLayout) {
           var pl = pendingLayout[m.id];
-          if (pl && pl.h === sigHash(sig)) {
+          if (pl && (pl.h === sigHash(sig) || pl.h === legacyH)) {
             if (st.i === 0 && !st.best) restoreSolver(st, pl);
             else if (st.best) { st.frozen = true; restoredCount++; }
           }
@@ -3929,7 +3933,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '108';
+  var APP_VERSION = '109';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
