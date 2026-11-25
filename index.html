@@ -1505,6 +1505,66 @@ html { touch-action: manipulation; }
     }
     return cur;
   }
+  // „Двойки листове“: най-празният лист и всеки друг лист се подреждат наново заедно (малка отделна задача само за тях двата),
+  // с тежест към това единият да остане възможно най-празен. Взема се само ако последният лист се изпразва и рязането не нараства много.
+  var PAIR_MS = 550;
+  function pairOpt(st, c, msEach) {
+    if (!c || !(st.tidy & 1) || st.machine !== 'saw' || c.bins.length < 2) return c;
+    var cur = c, spent = 0, BUDGET = 9000, t0 = performance.now(), seq = 0, rnd = makeRng(9191), em = typeof effortMs === 'function' ? effortMs() : 8000, CAP = em <= 8000 ? 4500 : em <= 30000 ? 7000 : 10000;
+    function sumCut(list) { var t = 0; list.forEach(function (b) { t += b.cutLen || 0; }); return t; }
+    function emptiest(bins) { var e = 0; for (var q = 1; q < bins.length; q++) if (bins[q].used < bins[e].used) e = q; return e; }
+    // група = най-празният лист + още един/два; подрежда се наново само тя, останалите листове не се пипат
+    function tryGroup(grp, ms) {
+      var bins = cur.bins, map = new Map(), orig = [], cl = [], src = grp.map(function (j) { return bins[j]; });
+      src.forEach(function (b) { b.items.forEach(function (it) { var o = it.p, n = {}; for (var kk in o) n[kk] = o[kk]; map.set(o, n); orig.push(o); cl.push(n); }); });
+      var sig = 'pair' + (++seq) + '|' + Date.now(), sv = getSolver(sig, cl, st.W, st.H, st.k, st.machine, st.trimOn, st.prio, !!st.bigThr, st.tidy);
+      sv.polish = true; sv.polBest = null;
+      var seedBins = src.map(function (b) { return { W: b.W, H: b.H, k: b.k, cfg: b.cfg, free: b.free, rects: b.rects, used: b.used, cut: b.cut, nextY: b.nextY, items: b.items.map(function (it) { return { p: map.get(it.p), x: it.x, y: it.y, w: it.w, h: it.h, r: it.r }; }) }; });
+      var seedOrder = []; seedBins.forEach(function (b) { b.items.forEach(function (it) { seedOrder.push(it.p); }); });
+      var seed = { order: seedOrder, cfg: cur.cfg, bins: seedBins, sc: scoreBins(seedBins, sv.machine, sv.trimOn, sv.prio, true, sv.tidy) };
+      sv.elite.push(seed); sv.best = seed; sv.polBest = seed;
+      stepSolver(sv, ms);
+      delete solvers[sig];
+      var res = sv.best;
+      if (!res || res === seed || res.bins.length > grp.length) return false;
+      var back = res.bins.map(function (b) { return { W: b.W, H: b.H, k: b.k, cfg: b.cfg, free: b.free, rects: b.rects, used: b.used, cut: b.cut, nextY: b.nextY, items: b.items.map(function (it) { return { p: orig[cl.indexOf(it.p)], x: it.x, y: it.y, w: it.w, h: it.h, r: it.r }; }) }; });
+      var all = [], placed = false;
+      bins.forEach(function (b, j) { if (grp.indexOf(j) < 0) all.push(b); else if (!placed) { back.forEach(function (x) { all.push(x); }); placed = true; } });
+      var sc = scoreBins(all, st.machine, st.trimOn, st.prio, true, st.tidy), newE = Infinity;
+      all.forEach(function (b) { if (b.used < newE) newE = b.used; });
+      var dcut = sumCut(all) - sumCut(bins);
+      if (all.length < bins.length || (newE < bins[emptiest(bins)].used - 0.003 * st.W * st.H && sc < cur.sc && spent + Math.max(0, dcut) <= BUDGET)) {
+        var ord = []; all.forEach(function (b) { b.items.forEach(function (it) { ord.push(it.p); }); });
+        cur = { order: ord, cfg: cur.cfg, bins: all, sc: sc }; spent += Math.max(0, dcut);
+        return true;
+      }
+      scoreBins(cur.bins, st.machine, st.trimOn, st.prio, true, st.tidy);
+      return false;
+    }
+    scoreBins(cur.bins, st.machine, st.trimOn, st.prio, true, st.tidy);
+    var pass, any;
+    for (pass = 0; pass < 2 && performance.now() - t0 < CAP; pass++) {
+      any = false;
+      var bins0 = cur.bins, e0 = emptiest(bins0), order = [];
+      bins0.forEach(function (b, j) { if (j !== e0) order.push(j); });
+      order.sort(function (a, b) { return (bins0[b].W * bins0[b].H - bins0[b].used) - (bins0[a].W * bins0[a].H - bins0[a].used); });
+      var keep = order.map(function (j) { return bins0[j]; });
+      for (var oj = 0; oj < keep.length && performance.now() - t0 < CAP; oj++) {
+        var bn = cur.bins, ei = emptiest(bn), bj = bn.indexOf(keep[oj]);
+        if (bj < 0 || bj === ei) continue;
+        if (tryGroup([ei, bj].sort(function (a, b) { return a - b; }), msEach)) any = true;
+      }
+      if (cur.bins.length > 2) {
+        for (var tr = 0; tr < 4 && performance.now() - t0 < CAP; tr++) {
+          var bn2 = cur.bins, e2 = emptiest(bn2), o1 = Math.floor(rnd() * bn2.length), o2 = Math.floor(rnd() * bn2.length);
+          if (o1 === e2 || o2 === e2 || o1 === o2) continue;
+          if (tryGroup([e2, o1, o2].sort(function (a, b) { return a - b; }), msEach * 1.6)) any = true;
+        }
+      }
+      if (!any) break;
+    }
+    return cur;
+  }
   function tidyLast(st, c) {
     if (!c || !(st.tidy & 1) || st.machine !== 'saw' || c.bins.length < 2) return c;
     var rnd = makeRng(777), best = c, bsc = scoreBins(c.bins, st.machine, st.trimOn, st.prio, true, st.tidy), t0 = performance.now(), k;
@@ -1517,7 +1577,7 @@ html { touch-action: manipulation; }
   function tidyFinish(list) {
     list.forEach(function (st) {
       if (st.frozen || !(st.tidy & 1) || !st.best) return;
-      var c = shown(st), r = tidyLast(st, squeezeLast(st, c));
+      var c = shown(st), r = tidyLast(st, pairOpt(st, squeezeLast(st, c), PAIR_MS));
       if (r !== c) { st.best = r; st.polBest = r; }
     });
   }
@@ -3869,7 +3929,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '107';
+  var APP_VERSION = '108';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
