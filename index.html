@@ -1556,7 +1556,7 @@ html { touch-action: manipulation; }
   /*CORE_END*/
 
   /* ---------- Готов разкрой във файла: при отваряне не се смята наново ---------- */
-  var pendingLayout = null, restoredCount = 0;
+  var pendingLayout = null, restoredCount = 0, carryOver = null;
   function sigHash(str) {
     var h = 2166136261;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -1971,6 +1971,16 @@ html { touch-action: manipulation; }
       if (W > 0 && H > 0 && fit.length && !manualOn) {
         var st = getSolver(sig, fit, W, H, k, s.mode, trim > 0 ? tn : 0, prio, s.strat === 'big', tmask);
         st.matId = m.id;
+        if (carryOver && carryOver[m.id] && st.i === 0 && !st.best) {
+          // След заключване: останалите листове остават точно както бяха, без ново търсене.
+          var cb = carryOver[m.id], idxN = {};
+          st.parts.forEach(function (q, qi) { idxN[q.n] = qi; });
+          var cmsg = { cfg: cb.cfg, polish: cb.polish, bins: cb.bins.map(function (b) {
+            return { W: b.W, H: b.H, k: b.k, cfg: b.cfg, free: b.free, rects: b.rects, used: b.used, cut: b.cut, nextY: b.nextY,
+              items: b.items.map(function (it) { return { pi: idxN[it.n], x: it.x, y: it.y, w: it.w, h: it.h, r: it.r }; }) };
+          }) };
+          restoreSolver(st, { c: cmsg });
+        }
         if (pendingLayout) {
           var pl = pendingLayout[m.id];
           if (pl && pl.h === sigHash(sig)) {
@@ -2763,6 +2773,7 @@ html { touch-action: manipulation; }
     try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {}); } catch (err) {}
     fsReal = false;
   }
+  var keepRest = false;
   function toggleLock(gi, bi) {
     var g = lastResult && lastResult.res[gi]; if (!g) return;
     var b = g.bins[bi]; if (!b) return;
@@ -2779,9 +2790,27 @@ html { touch-action: manipulation; }
       var lk2 = state.locked[mid] || (state.locked[mid] = { sig: JSON.stringify([g.W, g.H, g.k, state.s.mode, g.trim > 0 ? g.tn : 0]), sheets: [] });
       lk2.sheets.push(items);
       if (g.manual) rebaseMat[mid] = true;
-      msg.textContent = 'Листът е заключен като срязан. При промени в детайлите той остава същият, а се преизчислява само останалото.';
+      // Останалите листове се запазват точно такива, а ново търсене тръгва само с „Търси по-добро подреждане“.
+      carryOver = null; keepRest = false;
+      try {
+        var os = activeSolvers.filter(function (q) { return q.matId === mid; })[0], oc = os && shown(os);
+        if (oc && !g.manual) {
+          var f0 = b.items[0] && b.items[0].p, nTarget = f0 ? f0.n : null;
+          var inBin = function (sb) { return sb.items.some(function (it) { return it.p.n === nTarget || (it.p.comp && it.p.comp.some(function (x) { return x.n === nTarget; })); }); };
+          var rest = oc.bins.filter(function (sb) { return !inBin(sb); });
+          if (nTarget != null && rest.length === oc.bins.length - 1) {
+            carryOver = {}; carryOver[mid] = { cfg: oc.cfg, polish: !!os.polish, bins: rest.map(function (sb) {
+              return { W: sb.W, H: sb.H, k: sb.k, cfg: sb.cfg, free: sb.free, rects: sb.rects, used: sb.used, cut: sb.cut, nextY: sb.nextY,
+                items: sb.items.map(function (it) { return { n: it.p.n, x: it.x, y: it.y, w: it.w, h: it.h, r: it.r }; }) };
+            }) };
+            keepRest = true;
+          }
+        }
+      } catch (err) { carryOver = null; keepRest = false; }
+      msg.textContent = keepRest ? 'Листът е заключен като срязан. Останалите листове са както бяха; за по-добро подреждане натисни „Търси по-добро подреждане“.' : 'Листът е заключен като срязан. При промени в детайлите той остава същият, а се преизчислява само останалото.';
     }
-    save(); try { run(350); } finally { rebaseMat = {}; }
+    save();
+    try { if (keepRest) { activeSolvers.forEach(function (q) { q.frozen = true; }); } run(350); } finally { rebaseMat = {}; carryOver = null; keepRest = false; }
   }
   $('#out').addEventListener('click', function (e) {
     var mt = e.target.closest('button[data-mt]');
@@ -3840,7 +3869,7 @@ html { touch-action: manipulation; }
   })();
 
   /* ---- горна лента: менюта ---- */
-  var APP_VERSION = '106';
+  var APP_VERSION = '107';
   (function () {
     var m = document.getElementById('fileMsg'), t = null; if (!m || !window.MutationObserver) return;
     new MutationObserver(function () { m.title = m.textContent; clearTimeout(t); if (m.textContent) t = setTimeout(function () { m.textContent = ''; }, /^⚠/.test(m.textContent) ? 60000 : 9000); }).observe(m, { childList: true, characterData: true, subtree: true });
